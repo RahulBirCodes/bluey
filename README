@@ -7,3 +7,9 @@ TODOs:
 - [ ] Muon decisions - read kimik2 paper and make decisions on that
 - [ ] Manifold muon decisions - understand manifold muon double ascent loop
 - [ ] Write training loops for hparam sweep and training with wandb plotting
+
+
+python scripts/train_ols_xla.py --model mlp3 --norm rms --residual yes \
+  --dataset synthetic --n-train 20000 --n-val 5000 --n-dim 32 \
+  --batch_size 128 --learning_rate 1e-3 --optimizer adam \
+  --epochs 1 --eval_every 100 --save_checkpoint_dir ./checkpoints

@@ -1,0 +1,65 @@
+{
+  "os": "macOS-15.6.1-arm64-arm-64bit",
+  "python": "CPython 3.10.19",
+  "startedAt": "2025-11-07T22:02:05.191777Z",
+  "args": [
+    "--model",
+    "mlp3",
+    "--norm",
+    "rms",
+    "--residual",
+    "yes",
+    "--dataset",
+    "synthetic",
+    "--n-train",
+    "20000",
+    "--n-val",
+    "5000",
+    "--n-dim",
+    "32",
+    "--batch_size",
+    "128",
+    "--learning_rate",
+    "1e-3",
+    "--optimizer",
+    "adam",
+    "--epochs",
+    "1",
+    "--eval_every",
+    "100",
+    "--save_checkpoint_dir",
+    "./checkpoints"
+  ],
+  "program": "/Users/micah/bluey/scripts/train_ols_xla.py",
+  "codePath": "scripts/train_ols_xla.py",
+  "codePathLocal": "scripts/train_ols_xla.py",
+  "git": {
+    "remote": "https://github.com/RahulBirCodes/bluey.git",
+    "commit": "5d02f7b70cd05f559b050d81d9dc320ed1ffdf25"
+  },
+  "email": "micahmok@berkeley.edu",
+  "root": "/Users/micah/bluey",
+  "host": "wifi-10-41-156-140.wifi.berkeley.edu",
+  "executable": "/Users/micah/miniconda3/envs/tpu-ols/bin/python",
+  "cpu_count": 8,
+  "cpu_count_logical": 8,
+  "disk": {
+    "/": {
+      "total": "245107195904",
+      "used": "242591617024"
+    }
+  },
+  "memory": {
+    "total": "8589934592"
+  },
+  "apple": {
+    "name": "Apple M1",
+    "ecpuCores": 4,
+    "pcpuCores": 4,
+    "gpuCores": 7,
+    "memoryGb": 8,
+    "swapTotalBytes": "5368709120",
+    "ramTotalBytes": "8589934592"
+  },
+  "writerId": "w7d6p05s5a6s4jl2plrdpfw9iablsw5c"
+}

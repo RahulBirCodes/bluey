@@ -1,0 +1,138 @@
+_wandb:
+    value:
+        cli_version: 0.22.3
+        e:
+            w7d6p05s5a6s4jl2plrdpfw9iablsw5c:
+                apple:
+                    ecpuCores: 4
+                    gpuCores: 7
+                    memoryGb: 8
+                    name: Apple M1
+                    pcpuCores: 4
+                    ramTotalBytes: "8589934592"
+                    swapTotalBytes: "5368709120"
+                args:
+                    - --model
+                    - mlp3
+                    - --norm
+                    - rms
+                    - --residual
+                    - "yes"
+                    - --dataset
+                    - synthetic
+                    - --n-train
+                    - "20000"
+                    - --n-val
+                    - "5000"
+                    - --n-dim
+                    - "32"
+                    - --batch_size
+                    - "128"
+                    - --learning_rate
+                    - "1e-3"
+                    - --optimizer
+                    - adam
+                    - --epochs
+                    - "1"
+                    - --eval_every
+                    - "100"
+                    - --save_checkpoint_dir
+                    - ./checkpoints
+                codePath: scripts/train_ols_xla.py
+                codePathLocal: scripts/train_ols_xla.py
+                cpu_count: 8
+                cpu_count_logical: 8
+                disk:
+                    /:
+                        total: "245107195904"
+                        used: "242591617024"
+                email: micahmok@berkeley.edu
+                executable: /Users/micah/miniconda3/envs/tpu-ols/bin/python
+                git:
+                    commit: 5d02f7b70cd05f559b050d81d9dc320ed1ffdf25
+                    remote: https://github.com/RahulBirCodes/bluey.git
+                host: wifi-10-41-156-140.wifi.berkeley.edu
+                memory:
+                    total: "8589934592"
+                os: macOS-15.6.1-arm64-arm-64bit
+                program: /Users/micah/bluey/scripts/train_ols_xla.py
+                python: CPython 3.10.19
+                root: /Users/micah/bluey
+                startedAt: "2025-11-07T22:02:05.191777Z"
+                writerId: w7d6p05s5a6s4jl2plrdpfw9iablsw5c
+        m: []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "3":
+                - 2
+                - 13
+                - 16
+                - 61
+            "4": 3.10.19
+            "5": 0.22.3
+            "10":
+                - 20
+            "12": 0.22.3
+            "13": darwin-arm64
+batch_size:
+    value: 128
+dataset:
+    value: synthetic
+dropout:
+    value: 0
+epochs:
+    value: 1
+eval_every:
+    value: 100
+learning_rate:
+    value: 0.001
+log_every:
+    value: 10
+max_steps:
+    value: -1
+model:
+    value: mlp3
+momentum:
+    value: 0.9
+n_dim:
+    value: 32
+n_train:
+    value: 20000
+n_val:
+    value: 5000
+name:
+    value: null
+no_wandb:
+    value: false
+noise:
+    value: 0.1
+norm:
+    value: rms
+notes:
+    value: ""
+num_workers:
+    value: 2
+optimizer:
+    value: adam
+project:
+    value: tpu_ols_muon
+residual:
+    value: "yes"
+rho:
+    value: 1
+save_checkpoint_dir:
+    value: ./checkpoints
+save_checkpoint_every:
+    value: 200
+seed:
+    value: 42
+wandb_offline:
+    value: false
+weight_decay:
+    value: 0
+width:
+    value: 1024
