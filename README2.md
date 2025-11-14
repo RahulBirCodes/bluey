@@ -1,0 +1,15 @@
+mertiful
+
+TODOs:
+- [ ] Find out what compute cluster we're training on => if tinker then easy if not need to finesse compute
+- [ ] Write out pytorch code for models: 1. RMS norm with residual connections, 2. Layernorm learnable parameters with res connecs, 3. One without layernorm only, 4. One without layernorm without res connecs (optional harder).
+- [ ] Dataloader code - least squares with parameterized input/output features
+- [ ] Muon decisions - read kimik2 paper and make decisions on that
+- [ ] Manifold muon decisions - understand manifold muon double ascent loop
+- [ ] Write training loops for hparam sweep and training with wandb plotting
+
+
+python scripts/train_ols_xla.py --model mlp3 --norm rms --residual yes \
+  --dataset synthetic --n-train 20000 --n-val 5000 --n-dim 32 \
+  --batch_size 128 --learning_rate 1e-3 --optimizer adam \
+  --epochs 1 --eval_every 100 --save_checkpoint_dir ./checkpoints
