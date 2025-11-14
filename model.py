@@ -128,14 +128,67 @@ class AttentionBlock(nn.Module):
     t = self.mha(t)
     return t + x
 
-def swiglu(x):
-  
 
 class SwiGLU(nn.Module):
-  pass
+  def __init__(self, hidden_size=256):
+      super().__init__()
+      self.fc1 = nn.Linear(hidden_size, 2 * 2 * hidden_size, bias=False)
+      self.fc2 = nn.Linear(2 * hidden_size, hidden_size, bias=False)
+      self.beta = nn.Parameter(torch.tensor(1.0))
+
+  def forward(self, x):
+      x_proj = self.fc1(x)
+      x_main, x_gate = x_proj.chunk(2, dim=-1)
+      gate = x_gate * torch.sigmoid(self.beta * x_gate)
+      x = x_main * gate
+      return self.fc2(x)
+
+
+class MLP(nn.Module):
+  def __init__(self, hidden_size=256):
+    super().__init__()
+    self.hidden_size = hidden_size
+    self.norm = RMSNorm(hidden_size, learnable=False)
+    self.swiglu = SwiGLU(hidden_size)
+
+  def forward(self, x):
+    t = self.norm(x)
+    t = self.swiglu(t)
+    return t + x
+
 
 class TransformerBlock(nn.Module):
-  pass
+  def __init__(self, hidden_size=256, n_heads=8):
+    super().__init__()
+    self.hidden_size = hidden_size
+    self.n_heads = n_heads
+    self.attn = AttentionBlock(hidden_size, n_heads)
+    self.mlp = MLP(hidden_size)
+  
+  def forward(self, x):
+    x = self.attn(x)
+    x = self.mlp(x)
+    return x
+
 
 class Transformer(nn.Module):
-  pass
+  def __init__(self, hidden_size=256, n_heads=8, n_layers=12):
+    super().__init__()
+    self.hidden_size = hidden_size
+    self.n_heads = n_heads
+    self.n_layers = n_layers
+    self.blocks = nn.ModuleList([TransformerBlock(hidden_size, n_heads) for _ in range(n_layers)])
+    self.embedding = nn.Linear(12, hidden_size, bias=False)
+    # emb should NOT use standard Xavier initialization
+    # TODO check this again
+    nn.init.normal_(self.input_proj.weight, mean=0.0, std=(1.0 / 12)**0.5)
+    self.norm = RMSNorm(hidden_size, learnable=False)
+    self.unembedding = nn.Linear(hidden_size, 1, bias=False)
+  
+  def forward(self, x):
+    x = self.embedding(x)
+    for block in self.blocks:
+      x = block(x)
+    x = self.norm(x)
+    x = self.unembedding(x)
+    return x
