@@ -3,8 +3,43 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class RotaryEmbedding(nn.Module):
-  pass
+  def __init__(self, head_dim, base=10000):
+    super().__init__()
+    self.head_dim = head_dim
+    self.base = base
+  
+  def calc_inv_freqs(self):
+    inv_freqs = -2 * torch.arange(self.head_dim // 2) / self.head_dim
+    inv_freqs = self.base ** inv_freqs
+    return inv_freqs
+  
+  def calc_cos_sin(self, num_tokens):
+    inv_freqs = self.calc_inv_freqs()
+    t = torch.arange(num_tokens)
+    freqs = torch.einsum("i,j->ij", t, inv_freqs)
+    cos = freqs.cos()
+    sin = freqs.sin()
+    return cos, sin
+  
+  def apply_rotary_emb(self, x, cos, sin):
+    # t, d/2 = cos.shape
+    # t, d/2 = sin.shape
+    # b, h, t, d = x.shape
+    x1, x2 = torch.chunk(x, 2, dim=-1)
+    # b, h, t, d/2 = x1.shape
+    # b, h, t, d/2 = x2.shape
+    o1 = x1 * cos - x2 * sin
+    o2 = x1 * sin + x2 * cos
+    # absolute position of rotated features doesn't matter as long as it's consistent in q and k in dot prod
+    return torch.cat([o1, o2], dim=-1)
 
+  def forward(self, q, k):
+    num_tokens = q.shape[2]
+    cos, sin = self.calc_cos_sin(num_tokens)
+    q = self.apply_rotary_emb(q, cos, sin)
+    k = self.apply_rotary_emb(k, cos, sin)
+    return q, k
+    
 
 class RMSNorm(nn.Module):
   def __init__(self, num_features, eps=1e-5, learnable=True):
@@ -43,11 +78,13 @@ class MultiHeadAttention(nn.Module):
     self.d_model = d_model
     self.n_heads = n_heads
     self.d_k = d_model // n_heads
-    self.qkv = nn.Linear(d_model, 3 * d_model)
-    self.out = nn.Linear(d_model, d_model)
+    self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+    self.out = nn.Linear(d_model, d_model, bias=False)
+    self.rope = RotaryEmbedding(self.d_k)
 
   def sdpa(self, Q, K, V):
     B, H, T, D = Q.shape
+    Q, K = self.rope(Q, K)
     attn_scores = torch.matmul(Q, K.transpose(-2, -1))
     attn_scores = attn_scores / self.d_k ** 0.5
     mask = torch.tril(torch.ones(T, T, device=Q.device))
@@ -79,7 +116,20 @@ class MultiHeadAttention(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-  pass
+  def __init__(self, hidden_size=256, n_heads=8):
+    super().__init__()
+    self.hidden_size = hidden_size
+    self.n_heads = n_heads
+    self.norm = RMSNorm(hidden_size, learnable=False)
+    self.mha = MultiHeadAttention(hidden_size, n_heads)
+  
+  def forward(self, x):
+    t = self.norm(x)
+    t = self.mha(t)
+    return t + x
+
+def swiglu(x):
+  
 
 class SwiGLU(nn.Module):
   pass
