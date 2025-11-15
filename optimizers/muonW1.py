@@ -596,7 +596,7 @@ class MuonW(Optimizer):
                         # Scale update the KIMI way!
                         #Make sure that we scale by 0.2, which is the typical AdamW RMS update factors
                         #And also make sure that we scale by sqrt(max(A,B))
-                        update *= 0.2 * max(grad.size(-2) / grad.size(-1)) ** 0.5
+                        update *= 0.2 * max(grad.size(-2), grad.size(-1)) ** 0.5
 
                         # Reshape if needed
                         if len(orig_shape) == 4:
@@ -624,7 +624,7 @@ class MuonW(Optimizer):
                     bias_correction2 = 1 - beta2 ** step
 
                     # Compute AdamW update
-                    denom = (state['exp_avg_sq'].sqrt() / math.sqrt(bias_correction2)).add_(eps)
+                    denom = (state['exp_avg_sq'].sqrt() / sqrt(bias_correction2)).add_(eps)
                     update = state['exp_avg'] / bias_correction1 / denom
 
                     if isinstance(mask, torch.Tensor):

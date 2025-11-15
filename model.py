@@ -56,7 +56,6 @@ class RMSNorm(nn.Module):
       return x_norm * self.scale
     return x_norm
 
-
 class LayerNorm(nn.Module):
   def __init__(self, num_features, eps=1e-5):
     super().__init__()
@@ -181,7 +180,7 @@ class Transformer(nn.Module):
     self.embedding = nn.Linear(12, hidden_size, bias=False)
     # emb should NOT use standard Xavier initialization
     # TODO check this again
-    nn.init.normal_(self.input_proj.weight, mean=0.0, std=(1.0 / 12)**0.5)
+    # nn.init.normal_(self.input_proj.weight, mean=0.0, std=(1.0 / 12)**0.5)
     self.norm = RMSNorm(hidden_size, learnable=False)
     self.unembedding = nn.Linear(hidden_size, 1, bias=False)
   
