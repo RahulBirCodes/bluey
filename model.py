@@ -171,15 +171,17 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-  def __init__(self, hidden_size=256, n_heads=8, n_layers=12):
+  def __init__(self, hidden_size=256, n_heads=8, n_layers=12, xy_size=5):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
     self.n_layers = n_layers
+    self.xy_size = xy_size
     self.blocks = nn.ModuleList([TransformerBlock(hidden_size, n_heads) for _ in range(n_layers)])
-    self.embedding = nn.Linear(12, hidden_size, bias=False)
+    self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
     # emb should NOT use standard Xavier initialization
-    nn.init.normal_(self.embedding.weight, mean=0.0, std=2**-0.5)
+    # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1
+    nn.init.normal_(self.embedding.weight, mean=0.0, std=(xy_size + 1)**-0.5)
     self.norm = RMSNorm(hidden_size, learnable=False)
     self.unembedding = nn.Linear(hidden_size, 1, bias=False)
   
