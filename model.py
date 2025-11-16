@@ -180,8 +180,7 @@ class Transformer(nn.Module):
     self.blocks = nn.ModuleList([TransformerBlock(hidden_size, n_heads) for _ in range(n_layers)])
     self.embedding = nn.Linear(12, hidden_size, bias=False)
     # emb should NOT use standard Xavier initialization
-    # TODO check this again
-    nn.init.normal_(self.input_proj.weight, mean=0.0, std=(1.0 / 12)**0.5)
+    nn.init.normal_(self.embedding.weight, mean=0.0, std=2**-0.5)
     self.norm = RMSNorm(hidden_size, learnable=False)
     self.unembedding = nn.Linear(hidden_size, 1, bias=False)
   
