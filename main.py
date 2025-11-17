@@ -3,7 +3,7 @@ from training import hyperparameter_sweep
 
 # TODO: Replace these with the actual model factory and dataloader functions
 # Update the imports and function names to match what your teammate created
-from model import Transformer
+from model.model import Transformer
 from data import get_loaders   # or whatever the real function is
 
 

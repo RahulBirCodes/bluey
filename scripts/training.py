@@ -3,7 +3,74 @@ import torch.nn.functional as F
 import wandb
 
 
-def train_model(model, optimizer, train_loader, val_loader, num_epochs, device, log_every=1):
+def train(
+    model,
+    optimizer,
+    logger,
+    *,
+    get_batch,
+    batch_size=8,
+    num_pairs=5,
+    xy_size=5,
+    num_steps=1000,
+    device="cuda",
+    verbose=True,
+    print_interval=20
+):
+    model.to(device)
+    model.train()
+    for step in range(num_steps):
+        tokens, X, Y, W = get_batch(
+            batch_size=batch_size,
+            num_pairs=num_pairs,
+            xy_size=xy_size,
+            device=device,
+        )
+        outputs = model(tokens)
+        loss = 
+
+        # --- Backward ---
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # --- Print logging ---
+        if verbose and (step % print_interval == 0):
+            print(f"[Step {step}] loss = {loss.item():.6f}")
+
+        # --- WandB logging ---
+        logger.log({"loss": loss.item(), "step": step})
+
+    logger.finish()
+    return model
+
+
+
+def save_checkpoint(model, optimizer, epoch, loss, filepath):
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    }, filepath)
+
+def load_checkpoint(model, optimizer, filepath, device):
+    checkpoint = torch.load(filepath, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
+    return model, optimizer, epoch, loss
+
+def train_model(
+        model, 
+        optimizer, 
+        train_loader, 
+        val_loader, 
+        num_epochs, 
+        device, 
+        log_every=1,
+        checkpoint_every=50):
     """
     Train a model with logging to wandb.
     
@@ -77,6 +144,14 @@ def train_model(model, optimizer, train_loader, val_loader, num_epochs, device, 
                     "batch_loss": loss.item(),
                     "epoch": epoch
                 })
+        
+            if (batch_idx + 1) % checkpoint_every == 0:
+                save_checkpoint(
+                    model=model, 
+                    optimizer=optimizer, 
+                    epoch=batch_idx,
+                    loss=loss.item()
+                )
         
         # Average training loss for this epoch
         avg_train_loss = running_train_loss / num_train_batches
