@@ -383,40 +383,8 @@ def hyperparameter_sweep(
             - avg_last_k_train_loss
     """
     results = []
-
-    if use_ray:
-        if not HAS_RAY:
-            raise RuntimeError("use_ray=True but Ray is not installed.")
-        if not ray.is_initialized():
-            ray.init()
-
-        @ray.remote
-        def _remote_run_single_config(*args, **kwargs):
-            return _run_single_config(*args, **kwargs)
-
-        ray_jobs = []
-        for arch_name in model_architectures:
-            for hparams in _iter_hparam_configs(hyperparam_grid):
-                job = _remote_run_single_config.remote(
-                    experiment_phase,
-                    arch_name,
-                    make_model,
-                    optimizer_name,
-                    optimizer_class,
-                    hparams,
-                    get_batch=get_batch,
-                    num_steps=num_steps,
-                    device=device,
-                    project_name=project_name,
-                    base_ckpt_dir=base_ckpt_dir,
-                    last_k=last_k,
-                )
-                ray_jobs.append(job)
-
-        results = ray.get(ray_jobs)
-
-    else:
-        for arch_name in model_architectures:
+    
+    for arch_name in model_architectures:
             for hparams in _iter_hparam_configs(hyperparam_grid):
                 summary = _run_single_config(
                     experiment_phase,
@@ -433,6 +401,6 @@ def hyperparameter_sweep(
                     last_k=last_k,
                 )
                 results.append(summary)
-
+                
     return results
 
