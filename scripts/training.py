@@ -27,7 +27,7 @@ def train(
             device=device,
         )
         outputs = model(tokens)
-        loss = 
+        loss = outputs 
 
         # --- Backward ---
         optimizer.zero_grad()
