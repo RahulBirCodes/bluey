@@ -1,6 +1,6 @@
 import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    
 def get_batch(
     batch_size: int = 8,
     num_pairs: int = 5,          # T: number of (x, y) pairs per sequence
