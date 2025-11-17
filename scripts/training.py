@@ -2,6 +2,50 @@ import torch
 import torch.nn.functional as F
 import wandb
 
+
+def train(
+    model,
+    optimizer,
+    logger,
+    *,
+    get_batch,
+    batch_size=8,
+    num_pairs=5,
+    xy_size=5,
+    num_steps=1000,
+    device="cuda",
+    verbose=True,
+    print_interval=20
+):
+    model.to(device)
+    model.train()
+    for step in range(num_steps):
+        tokens, X, Y, W = get_batch(
+            batch_size=batch_size,
+            num_pairs=num_pairs,
+            xy_size=xy_size,
+            device=device,
+        )
+        outputs = model(tokens)
+        loss = 
+
+        # --- Backward ---
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # --- Print logging ---
+        if verbose and (step % print_interval == 0):
+            print(f"[Step {step}] loss = {loss.item():.6f}")
+
+        # --- WandB logging ---
+        logger.log({"loss": loss.item(), "step": step})
+
+    logger.finish()
+    return model
+
+
+
 def save_checkpoint(model, optimizer, epoch, loss, filepath):
     torch.save({
         'epoch': epoch,

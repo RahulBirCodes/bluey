@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.model import MultiHeadAttention
+from model import MultiHeadAttention
 from optimizers.muonW1 import MuonW
 from optimizers.manifold_muonW import ManifoldMuonW
-from model.model import Transformer
+from model import Transformer
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ### check if model can learn to output initial token, given input [A, B, C, D, E], MHA should output [A, A, A, A, A]
@@ -23,7 +24,26 @@ def test_identity(model, steps=40, batch_size=8, seq_len=5, lr=1e-3):
         optim.step()
         if step % 20 == 0:
             print(f"Step {step:3d} | Loss: {loss.item():.6f}")
-            
+
+
+### check if model with RoPE can learn to output shifted left token, given input [A, B, C, D, E], MHA should output [0, A, B, C, D]
+### both NoPE and RoPE can learn this, so we look at the attn probabilities to see that RoPE learns to attend to previous token
+def test_shift_left(model, steps=70, batch_size=1, seq_len=5, lr=1e-3, d_model=128):
+    model.train()
+    optim = torch.optim.Adam(model.parameters(), lr=lr)
+    x = get_batch(batch_size, seq_len)
+    target = x.clone()
+    target[:, 1:, :] = x[:, :-1, :]
+    for step in range(steps):
+        out, probs = model(x)
+        loss = ((out - target) ** 2).mean()
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+        if step % 60 == 0 and step != 0:
+            print("Attn Probs:", probs)
+            print(f"Shift Test | Step {step:3d} | Loss: {loss.item():.6f}")
+
 
 def test_muonW(model, steps=40, batch_size=8, seq_len=5, lr=1e-3):
     optim = MuonW(model.parameters(), lr=1e-3,)
