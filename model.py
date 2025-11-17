@@ -36,6 +36,7 @@ class RotaryEmbedding(nn.Module):
   def forward(self, q, k):
     num_tokens = q.shape[2]
     cos, sin = self.calc_cos_sin(num_tokens)
+    cos, sin = cos.to(q.device), sin.to(q.device)
     q = self.apply_rotary_emb(q, cos, sin)
     k = self.apply_rotary_emb(k, cos, sin)
     return q, k
@@ -90,7 +91,7 @@ class MultiHeadAttention(nn.Module):
     attn_scores= attn_scores.masked_fill(mask == 0, -float("inf"))
     attn_probs = F.softmax(attn_scores, dim=-1)
     out = torch.matmul(attn_probs, V)
-    return out
+    return out, attn_probs
 
   def split_heads(self, x):
     b, t, d = x.shape
@@ -109,9 +110,9 @@ class MultiHeadAttention(nn.Module):
     q = self.split_heads(q)
     k = self.split_heads(k)
     v = self.split_heads(v)
-    attn_out = self.sdpa(q, k, v)
+    attn_out, attn_probs = self.sdpa(q, k, v)
     output = self.out(self.combine_heads(attn_out))
-    return output 
+    return output, attn_probs
 
 
 class AttentionBlock(nn.Module):
@@ -124,7 +125,7 @@ class AttentionBlock(nn.Module):
   
   def forward(self, x):
     t = self.norm(x)
-    t = self.mha(t)
+    t, _ = self.mha(t)
     return t + x
 
 
