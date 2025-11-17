@@ -46,8 +46,31 @@ def train(
 
 
 
+def save_checkpoint(model, optimizer, epoch, loss, filepath):
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    }, filepath)
 
-def train_model(model, optimizer, train_loader, val_loader, num_epochs, device, log_every=1):
+def load_checkpoint(model, optimizer, filepath, device):
+    checkpoint = torch.load(filepath, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
+    return model, optimizer, epoch, loss
+
+def train_model(
+        model, 
+        optimizer, 
+        train_loader, 
+        val_loader, 
+        num_epochs, 
+        device, 
+        log_every=1,
+        checkpoint_every=50):
     """
     Train a model with logging to wandb.
     
@@ -121,6 +144,14 @@ def train_model(model, optimizer, train_loader, val_loader, num_epochs, device, 
                     "batch_loss": loss.item(),
                     "epoch": epoch
                 })
+        
+            if (batch_idx + 1) % checkpoint_every == 0:
+                save_checkpoint(
+                    model=model, 
+                    optimizer=optimizer, 
+                    epoch=batch_idx,
+                    loss=loss.item()
+                )
         
         # Average training loss for this epoch
         avg_train_loss = running_train_loss / num_train_batches
