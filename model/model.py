@@ -71,7 +71,6 @@ class LayerNorm(nn.Module):
     x_norm = (x - mean) * torch.rsqrt(variance + self.eps)
     return x_norm * self.scale + self.bias
 
-
 class MultiHeadAttention(nn.Module):
   def __init__(self, d_model = 256, n_heads = 8):
     super().__init__()
@@ -172,7 +171,7 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-  def __init__(self, hidden_size=256, n_heads=8, n_layers=12, xy_size=5):
+  def __init__(self, hidden_size=256, n_heads=8, n_layers=15, xy_size=5):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
