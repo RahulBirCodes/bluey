@@ -16,7 +16,6 @@ def get_dataloaders():
     """Returns (train_loader, val_loader) tuple."""
     return get_loaders()  # Update this to match the actual function name
 
-
 def main():
     # Detect device
     device = "cuda" if torch.cuda.is_available() else "cpu"
