@@ -3,6 +3,35 @@ import torch.nn.functional as F
 import wandb
 
 
+def save_checkpoint(model, optimizer, step, epoch, path, scheduler=None):
+    ckpt = {
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict() if scheduler else None,
+        "step": step,
+        "epoch": epoch,
+        "rng_state": torch.random.get_rng_state(),
+        "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
+    }
+
+    torch.save(ckpt, path)
+    print(f"[checkpoint] saved to {path}")
+
+def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
+    ckpt = torch.load(path, map_location=device)
+    model.load_state_dict(ckpt["model"])
+    optimizer.load_state_dict(ckpt["optimizer"])
+    if scheduler and ckpt["scheduler"]:
+        scheduler.load_state_dict(ckpt["scheduler"])
+    torch.random.set_rng_state(ckpt["rng_state"])
+    if ckpt["cuda_rng_state"] is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state(ckpt["cuda_rng_state"])
+    print(f"[checkpoint] resumed from {path}")
+    return ckpt["step"], ckpt["epoch"]
+
+
+
+
 def train(
     model,
     optimizer,
@@ -44,23 +73,6 @@ def train(
     logger.finish()
     return model
 
-
-
-def save_checkpoint(model, optimizer, epoch, loss, filepath):
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss,
-    }, filepath)
-
-def load_checkpoint(model, optimizer, filepath, device):
-    checkpoint = torch.load(filepath, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    epoch = checkpoint['epoch']
-    loss = checkpoint['loss']
-    return model, optimizer, epoch, loss
 
 def train_model(
         model, 

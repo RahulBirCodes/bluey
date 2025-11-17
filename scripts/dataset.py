@@ -23,7 +23,7 @@ def get_batch(
         x_1, y_1, ..., x_T,  y_T
         or
         y_1, x_1, ..., y_T,  x_T 
-        (chosen randomly)
+        (chosen randomly to remove any positional symmetry)
 
     Also returns:
         X: (B, T, D)
