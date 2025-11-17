@@ -71,7 +71,6 @@ class LayerNorm(nn.Module):
     x_norm = (x - mean) * torch.rsqrt(variance + self.eps)
     return x_norm * self.scale + self.bias
 
-
 class MultiHeadAttention(nn.Module):
   def __init__(self, d_model = 256, n_heads = 8):
     super().__init__()
