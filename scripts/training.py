@@ -5,7 +5,6 @@ import os
 import itertools
 import hashlib
 from collections import deque
-
 import wandb
 
 # Optional TPU support
@@ -58,6 +57,7 @@ def save_checkpoint(model, optimizer, step, epoch, path, scheduler=None):
     torch.save(ckpt, path)
     print(f"[checkpoint] saved to {path}")
 
+
 def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
     ckpt = torch.load(path, map_location=device)
     model.load_state_dict(ckpt["model"])
@@ -71,35 +71,22 @@ def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
     return ckpt["step"], ckpt["epoch"]
 
 
-
-
 def train(
-    model, #Should be a transformer model
-    optimizer, #Could be AdamW, ManifoldMuonW, or MuonW
-    logger, #Should be a wandb logger
+    model,
+    optimizer,
+    logger,
     *,
-    get_batch, #Function that returns tokens, X, Y, W, and indices of tokens that refer to X tokens
+    get_batch,
     batch_size=8,
     num_pairs=5,
     xy_size=5,
     num_steps=1000,
-    device="cuda", #Could be "TPU", "cuda", "cpu"
+    device="cuda",
     verbose=True,
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
 ):
-    """
-    Train model on synthetic least-squares data.
-
-    Assumes:
-      - get_batch(...) returns (tokens, X, Y, W, x_token_indices)
-      - tokens: (B, T_seq, token_dim)
-      - X, Y:  (B, num_pairs, xy_size)
-      - model(tokens) -> (B, T_seq, xy_size)
-      - x_token_indices: positions where *x* is input; outputs at these
-        positions are interpreted as predictions of the next y.
-    """
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
     model.train()
@@ -108,32 +95,18 @@ def train(
         os.makedirs(checkpoint_dir, exist_ok=True)
 
     for step in range(num_steps):
-        # --- Generate fresh synthetic batch every step ---
-        # Yes: for synthetic LS tasks, it's standard to resample each iteration.
         tokens, X, Y, W, x_token_indices = get_batch(
             batch_size=batch_size,
             num_pairs=num_pairs,
             xy_size=xy_size,
             device=device,
         )
-        # tokens, X, Y, etc. should already be on the right device
-
-        # FWD
-        outputs = model(tokens)               # (B, T_seq, xy_size)
-
+        outputs = model(tokens)
         B, S, D = outputs.shape
-        # Gather predictions at x-token positions
-        # x_token_indices: 1D tensor (num_pairs,) of time indices
-        # We want outputs[:, x_token_indices, :] -> (B, num_pairs, xy_size)
-
-        b_idx = torch.arange(B, device=device).unsqueeze(1).expand(B, S)
-
-        y_pred = outputs[b_idx, x_token_indices, :]
-
-        # Least-squares / MSE loss between predicted y’s and true Y
+        b_idx = torch.arange(B, device=device).unsqueeze(1)
+        y_pred = outputs[b_idx, x_token_indices, 2+xy_size:]
         loss = torch.sum((y_pred-Y)**2, dim=1).mean()
 
-        # BWD
         optimizer.zero_grad()
         loss.backward()
         optimizer_step_fn(optimizer)
@@ -163,28 +136,6 @@ def train(
         logger.finish()
 
     return model
-
-
-def load_checkpoint(model, optimizer, filepath, device="cuda"):
-    """
-    Device-aware checkpoint loading.
-    """
-    device_obj, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
-    checkpoint = torch.load(filepath, map_location=device_obj)
-    model.load_state_dict(checkpoint["model_state"])
-    optimizer.load_state_dict(checkpoint["optimizer_state"])
-    step = checkpoint["step"]
-    loss = checkpoint["loss"]
-    model.to(device_obj)
-    return model, optimizer, step, loss
-
-
-# Optional Ray support
-try:
-    import ray
-    HAS_RAY = True
-except ImportError:
-    HAS_RAY = False
 
 
 class WandbLossLogger:
