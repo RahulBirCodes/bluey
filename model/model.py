@@ -192,3 +192,6 @@ class Transformer(nn.Module):
     x = self.norm(x)
     x = self.unembedding(x)
     return x
+
+def make_model(arch_name):
+  
