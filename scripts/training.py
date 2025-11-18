@@ -6,6 +6,9 @@ import itertools
 import hashlib
 from collections import deque
 import time
+import torch_xla
+import wandb
+import datetime
 
 # Optional TPU support
 try:
@@ -145,7 +148,7 @@ def train(
             scheduler.step()
 
         if checkpoint_dir is not None and step % checkpoint_every == 0 and step != 0:
-            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}.pt")
+            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}_time_{iter_start}.pt")
             state = {
                 "step": step + 1,
                 "model_state": model.state_dict(),
@@ -244,12 +247,17 @@ def _run_single_config(
     """
     hparam_str = _short_hparam_str(hparams)
     # base_ckpt_dir/phase/optimizer/arch/hparam_str/
+
+    current_time = time.time()
+    time_hash = hash(current_time)
+
     ckpt_dir = os.path.join(
         base_ckpt_dir,
         experiment_phase,
         optimizer_name,
         arch_name,
         hparam_str,
+        
     )
     os.makedirs(ckpt_dir, exist_ok=True)
 
