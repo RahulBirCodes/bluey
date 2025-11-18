@@ -204,3 +204,16 @@ class Transformer(nn.Module):
       x = self.norm(x)
     x = self.unembedding(x)
     return x
+
+
+def make_model(arch_name):
+    if arch_name == "rms":
+      ln = lambda d: RMSNorm(d, learnable=False)
+    elif arch_name == "standard":
+      ln = lambda d: LayerNorm(d, learnable=True)
+    else:
+      ln = None
+
+    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln)
+
+    return transformer

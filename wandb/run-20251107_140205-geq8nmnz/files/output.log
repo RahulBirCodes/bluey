@@ -1,2 +1,0 @@
-/Users/micah/miniconda3/envs/tpu-ols/lib/python3.10/site-packages/torch/utils/data/dataloader.py:692: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, device pinned memory won't be used.
-  warnings.warn(warn_msg)

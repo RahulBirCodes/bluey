@@ -4,7 +4,6 @@ from optimizers.msign import msign
 import math
 import torch
 
-
 def manifold_muon_step(
     W: torch.Tensor,
     G: torch.Tensor,
@@ -39,13 +38,11 @@ def manifold_muon_step(
     # Primal descent step
     new_W = W - lr * A
 
-    # Retraction back to (approx) Stiefel
-    AtA = A.T @ A
-    c = 1.0 / math.sqrt(1.0 + lr ** 2)
-    new_W = new_W + new_W @ AtA * (c - 1.0)
+    new_W = msign(new_W)
 
     if not orig_tall:
         new_W = new_W.transpose(-2, -1)
+        
     return new_W
 
 def manifold_muon_ADMM_step(
@@ -84,7 +81,7 @@ def manifold_muon_ADMM_step(
     # (at convergence, G + 2 * W @ Lambda \approx X)
     A = msign(G + 2 * W @ Lambda)
     # Descend on the primal problem
-    new_W = W - eta * A
+    new_W = W - lr * A
     # Retract to the manifold
     new_W = msign(new_W)
     # Restore the shape of the solution and return

@@ -5,7 +5,7 @@ import os
 import itertools
 import hashlib
 from collections import deque
-import wandb
+import time
 
 # Optional TPU support
 try:
@@ -17,12 +17,6 @@ except ImportError:
 def resolve_device_and_saver(device_str: str):
     """
     Returns (torch.device-like, save_fn, optimizer_step_fn).
-
-    device_str:
-      - "cpu"      → CPU
-      - "cuda"     → current CUDA device
-      - "cuda:0"   → specific CUDA device
-      - "tpu"      → XLA device (requires torch_xla)
     """
     if device_str.lower() == "tpu":
         if not HAS_XLA:
@@ -131,6 +125,7 @@ def train(
         prev_step = load_checkpoint(model, optimizer, resume_from, scheduler=scheduler, device=device)
 
     for step in range(prev_step, num_steps):
+        iter_start = time.time()
         tokens, X, Y, W, x_token_indices = get_batch(
             batch_size=batch_size,
             num_pairs=num_pairs,
@@ -140,7 +135,7 @@ def train(
         outputs = model(tokens)
         B, S, D = outputs.shape
         b_idx = torch.arange(B, device=device).unsqueeze(1)
-        y_pred = outputs[b_idx, x_token_indices, 2+xy_size:]
+        y_pred = outputs[b_idx, x_token_indices, :]
         loss = torch.sum((y_pred-Y)**2, dim=1).mean()
 
         optimizer.zero_grad()
@@ -149,7 +144,7 @@ def train(
         if scheduler is not None:
             scheduler.step()
 
-        if checkpoint_dir is not None and (step + 1) % checkpoint_every == 0:
+        if checkpoint_dir is not None and step % checkpoint_every == 0 and step != 0:
             ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}.pt")
             state = {
                 "step": step + 1,
@@ -166,7 +161,8 @@ def train(
             print(f"[Step {step}] loss = {loss.item():.6f}")
 
         if logger is not None:
-            logger.log({"loss": loss.item(), "step": step})
+            iter_sec = time.time() - iter_start
+            logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
 
     if logger is not None:
         logger.finish()
@@ -193,7 +189,7 @@ class WandbLossLogger:
         self.run.finish()
 
 
-def _short_hparam_str(hparams: dict, max_len: int = 30) -> str:
+def _short_hparam_str(hparams: dict, max_len: int = 40) -> str:
     """
     Turn a small hyperparam dict into a compact, filesystem-safe string.
     Example: {'lr':1e-3,'wd':0.1} -> 'lr1e-3_wd0.1' (possibly truncated + hash).
@@ -231,6 +227,8 @@ def _run_single_config(
     make_model,
     optimizer_name: str,
     optimizer_class,
+    xy_size: int,
+    num_pairs: int,
     hparams: dict,
     *,
     get_batch,
@@ -255,7 +253,7 @@ def _run_single_config(
     )
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    run_name = f"{experiment_phase}-{optimizer_name}-{arch_name}-{hparam_str}"
+    run_name = f"{hparam_str}"
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
     run = wandb.init(
         project=project_name,
@@ -274,49 +272,37 @@ def _run_single_config(
     logger = WandbLossLogger(run, last_k=last_k)
 
     model = make_model(arch_name)
-    optimizer = optimizer_class(model.parameters(), **hparams)
+    opt_kwargs = {}
+    if "lr" in hparams:
+        opt_kwargs["lr"] = hparams["lr"]
+    if "weight_decay" in hparams:
+        opt_kwargs["weight_decay"] = hparams["weight_decay"]
+    if "beta1" in hparams and "beta2" in hparams:
+        opt_kwargs["betas"] = (hparams["beta1"], hparams["beta2"])
+    for k in ["momentum", "nesterov"]:
+        if k in hparams:
+            opt_kwargs[k] = hparams[k]
+    optimizer = optimizer_class(model.parameters(), **opt_kwargs)
+
     model = train(
         model=model,
         optimizer=optimizer,
         logger=logger,
         get_batch=get_batch,
         batch_size=hparams.get("batch_size", 8),
-        num_pairs=hparams.get("num_pairs", 5),
-        xy_size=hparams.get("xy_size", 5),
+        num_pairs=num_pairs,
+        xy_size=xy_size,
         num_steps=num_steps,
         device=device,
         checkpoint_every=hparams.get("checkpoint_every", 50),
         checkpoint_dir=ckpt_dir,
         verbose=True,
     )
-
-    # --- Summaries ---
-    # Average of last K training losses
     if len(logger.last_k) > 0:
         avg_last_k_loss = sum(logger.last_k) / len(logger.last_k)
     else:
         avg_last_k_loss = float("nan")
-
-    # Evaluate on a fresh synthetic batch as a "final loss"
-    model.eval()
-    with torch.no_grad():
-        tokens, X, Y, W, x_token_indices = get_batch(
-            batch_size=hparams.get("eval_batch_size", 8),
-            num_pairs=hparams.get("num_pairs", 5),
-            xy_size=hparams.get("xy_size", 5),
-            device=device,
-        )
-        outputs = model(tokens)
-        y_pred = outputs[:, x_token_indices, :]
-        final_loss = torch.nn.functional.mse_loss(y_pred, Y).item()
-
-    wandb.log(
-        {
-            "final_eval_loss": final_loss,
-            "avg_last_k_train_loss": avg_last_k_loss,
-        }
-    )
-
+    wandb.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
 
     return {
@@ -331,14 +317,15 @@ def _run_single_config(
         "avg_last_k_train_loss": avg_last_k_loss,
     }
 
-
 def hyperparameter_sweep(
-    experiment_phase: str,           # "sweep", "exp1", etc.
-    model_architectures: list[str],  # ["ln", "no_ln_resnet", ...]
-    make_model,                      # callable arch_name -> nn.Module
-    optimizer_name: str,             # "AdamW", "MuonW", "ManifoldMuonW"
-    optimizer_class,                 # e.g. torch.optim.AdamW
+    experiment_phase: str,
+    model_architectures: list[str],
+    make_model,
+    optimizer_name: str,
+    optimizer_class,
     hyperparam_grid: dict[str, list],
+    xy_size: int,
+    num_pairs: int,
     *,
     get_batch,
     num_steps: int,
@@ -352,18 +339,13 @@ def hyperparameter_sweep(
     for a given optimizer, with organized wandb + checkpoint structure.
 
     Returns:
-        results: list of dicts, each with keys:
-            - experiment_phase, optimizer, arch
-            - hparams (dict)
-            - ckpt_dir
-            - run_name, group_name
-            - final_eval_loss
-            - avg_last_k_train_loss
+        results: list of training run results
     """
     results = []
     
     for arch_name in model_architectures:
             for hparams in _iter_hparam_configs(hyperparam_grid):
+                print(hparams)
                 summary = _run_single_config(
                     experiment_phase,
                     arch_name,
@@ -372,6 +354,8 @@ def hyperparameter_sweep(
                     optimizer_class,
                     hparams,
                     get_batch=get_batch,
+                    num_pairs=num_pairs,
+                    xy_size=xy_size,
                     num_steps=num_steps,
                     device=device,
                     project_name=project_name,
@@ -379,6 +363,6 @@ def hyperparameter_sweep(
                     last_k=last_k,
                 )
                 results.append(summary)
-                
+
     return results
 
