@@ -50,8 +50,6 @@ def main():
     else:
         device = "cpu"   # set "tpu" manually if you want to use XLA + your resolve_device logic
 
-    #Hardcode for colab test
-    device = "tpu"
     # -----------------------------
     # 2. Define hyperparameter grid
     # -----------------------------
