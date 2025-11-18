@@ -321,7 +321,6 @@ def _run_single_config(
         "ckpt_dir": ckpt_dir,
         "run_name": run_name,
         "group_name": group_name,
-        "final_eval_loss": final_loss,
         "avg_last_k_train_loss": avg_last_k_loss,
     }
 
