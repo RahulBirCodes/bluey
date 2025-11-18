@@ -90,10 +90,18 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--continue_checkpoint",
+        action="store_true",
+        help="Configure training loop to continue from found furthest checkpoint per iteration.",
+    )
+
+    parser.add_argument(
         "--print-config",
         action="store_true",
         help="Print the resolved configuration before running sweeps.",
     )
+
+    
 
     return parser.parse_args()
 
@@ -175,6 +183,7 @@ def main(args: argparse.Namespace | None = None):
         project_name=args.project_name,
         base_ckpt_dir=args.base_ckpt_dir,
         last_k=50,
+        continue_checkpoint=args.continue_checkpoint,
     )
 
     # -----------------------------

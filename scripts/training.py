@@ -55,7 +55,7 @@ def save_checkpoint(model, optimizer, step, path, scheduler=None):
     print(f"[checkpoint] saved to {path}")
 
 
-def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
+def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None):
     ckpt = torch.load(path, map_location=device)
     model.load_state_dict(ckpt["model"])
     optimizer.load_state_dict(ckpt["optimizer"])
@@ -114,8 +114,8 @@ def train(
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
-    resume_from=None,
-    scheduler=None
+    resume_from: str="", #Should be the path for the most recent checkpoint
+    scheduler=None,
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
@@ -125,9 +125,9 @@ def train(
         os.makedirs(checkpoint_dir, exist_ok=True)
     
     prev_step = 0
-    if resume_from is not None:
+    if resume_from is not "":
         prev_step = load_checkpoint(model, optimizer, resume_from, scheduler=scheduler, device=device)
-
+    
     for step in range(prev_step, num_steps):
         iter_start = time.time()
         tokens, X, Y, W, x_token_indices = get_batch(
@@ -227,6 +227,17 @@ def _iter_hparam_configs(hyperparam_grid: dict):
     for combo in itertools.product(*values):
         yield dict(zip(keys, combo))
 
+#TODO Psuedocode below!
+def find_checkpoint(curr_dir: str, ) -> str: #Looks within the current directory and finds any checkpoint, if any
+    highest_iteration = 0
+    path = ""
+    for file in os.makedirs(curr_dir):
+        if .pt is in end of file:
+            if numbers in file > highest_iteration:
+                path = file
+                highest_iteration = numbers
+
+    return path
 
 def _run_single_config(
     experiment_phase: str,
@@ -244,6 +255,7 @@ def _run_single_config(
     project_name: str,
     base_ckpt_dir: str,
     last_k: int,
+    continue_checkpoint: bool=True,
 ):
     """
     Run a single (arch, hyperparam config) training job.
@@ -296,6 +308,10 @@ def _run_single_config(
             opt_kwargs[k] = hparams[k]
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
+    resume_from = "" #Should pass a string
+    if continue_checkpoint:
+        resume_from = find_checkpoint(ckpt_dir)
+    
     model = train(
         model=model,
         optimizer=optimizer,
@@ -308,6 +324,7 @@ def _run_single_config(
         device=device,
         checkpoint_every=hparams.get("checkpoint_every", 50),
         checkpoint_dir=ckpt_dir,
+        resume_from=None, #TODO please check where this will be passed from 
         verbose=True,
     )
     if len(logger.last_k) > 0:
@@ -344,6 +361,7 @@ def hyperparameter_sweep(
     project_name: str = "bluey-merdifold",
     base_ckpt_dir: str = "checkpoints",
     last_k: int = 50,
+    continue_checkpoint: bool = False
 ):
     """
     Run a grid search over hyperparameters *and* architectures
@@ -372,6 +390,7 @@ def hyperparameter_sweep(
                     project_name=project_name,
                     base_ckpt_dir=base_ckpt_dir,
                     last_k=last_k,
+                    continue_checkpoint=continue_checkpoint,
                 )
                 results.append(summary)
 
