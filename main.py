@@ -13,6 +13,29 @@ OPTIMIZERS = {
     "ManifoldMuonW": ManifoldMuonW,
 }
 
+HYPERPARAM_GRID_ADAMW = {
+    "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
+    "beta1": [0.85, 0.9, 0.95],
+    "beta2": [0.95, 0.98, 0.999],
+    "weight_decay": [0.0, 0.01, 0.1, 0.2],
+    "batch_size": [16, 32, 64, 128, 256, 512, 1024],
+}
+
+HYPERPARAM_GRID_MUON = {
+    "lr_matrix": [1e-3, 3e-3, 1e-2, 2e-2, 3e-2],
+    "lr_scalar": [1e-4, 3e-4, 1e-3, 3e-3],
+    "momentum": [0.9, 0.95, 0.98],  # often you’ll just fix 0.95
+    "weight_decay": [0.0, 0.01, 0.1],
+    "batch_size": [64, 128, 256, 512, 1024],
+}
+
+HYPERPARAM_GRID_LION = {
+    "lr": [3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
+    "beta1": [0.85, 0.9, 0.95],
+    "beta2": [0.97, 0.99, 0.995],
+    "weight_decay": [0.0, 0.01, 0.1],
+    "batch_size": [64, 128, 256, 512, 1024],
+}
 
 def main():
     # -----------------------------
@@ -30,13 +53,13 @@ def main():
     # 2. Define hyperparameter grid
     # -----------------------------
     hyperparam_grid = {
-        "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2],
+        "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
         "weight_decay": [0.8, 0.9, 0.95, 1.0],
-        "batch_size": [2, 4, 8, 16, 32, 64, 128, 256],
-        "num_pairs": [5],
+        "betas": [],
+        "batch_size": [8, 16, 32, 64, 128, 256, 512, 1024],
+        "num_pairs": [30],
         "xy_size": [5],
     }
-
 
     model_architectures = ["rms", "standard"]
 
