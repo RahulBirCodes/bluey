@@ -44,11 +44,14 @@ def main():
     optimizer_name = "AdamW"  # change to "MuonW", "ManifoldMuonW", etc. as needed
     optimizer_class = OPTIMIZERS[optimizer_name]
 
+
     if torch.cuda.is_available():
         device = "cuda"
     else:
         device = "cpu"   # set "tpu" manually if you want to use XLA + your resolve_device logic
 
+    #Hardcode for colab test
+    device = "tpu"
     # -----------------------------
     # 2. Define hyperparameter grid
     # -----------------------------
