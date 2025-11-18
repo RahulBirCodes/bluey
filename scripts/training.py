@@ -158,7 +158,7 @@ def train(
                 "model_state": model.state_dict(),
                 "optimizer_state": optimizer.state_dict(),
                 "loss": loss.item(),
-                "scheduler": scheduler.state_dict()
+                "scheduler": scheduler.state_dict() if scheduler else None,
             }
             save_fn(state, ckpt_path)
             if verbose:
@@ -335,8 +335,8 @@ def hyperparameter_sweep(
     optimizer_name: str,
     optimizer_class,
     hyperparam_grid: dict[str, list],
-    xy_size: int,
-    num_pairs: int,
+    xy_size: int = 5,
+    num_pairs: int = 5,
     *,
     get_batch,
     num_steps: int,
