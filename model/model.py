@@ -41,7 +41,6 @@ class RotaryEmbedding(nn.Module):
     k = self.apply_rotary_emb(k, cos, sin)
     return q, k
     
-
 class RMSNorm(nn.Module):
   def __init__(self, num_features, eps=1e-5, learnable=True):
     super().__init__()
@@ -115,15 +114,20 @@ class MultiHeadAttention(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-  def __init__(self, hidden_size=256, n_heads=8):
+  def __init__(self, hidden_size=256, n_heads=8, norm_fn=None):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
-    self.norm = RMSNorm(hidden_size, learnable=False)
+    self.has_norm = norm_fn is not None
+    if self.has_norm:
+      self.norm = norm_fn(hidden_size)
     self.mha = MultiHeadAttention(hidden_size, n_heads)
   
   def forward(self, x):
-    t = self.norm(x)
+    if self.has_norm:
+      t = self.norm(x)
+    else:
+      t = x
     t, _ = self.mha(t)
     return t + x
 
@@ -144,25 +148,30 @@ class SwiGLU(nn.Module):
 
 
 class MLP(nn.Module):
-  def __init__(self, hidden_size=256):
+  def __init__(self, hidden_size=256, norm_fn=None):
     super().__init__()
     self.hidden_size = hidden_size
-    self.norm = RMSNorm(hidden_size, learnable=False)
+    self.has_norm = norm_fn is not None
+    if self.has_norm:
+      self.norm = norm_fn(hidden_size)
     self.swiglu = SwiGLU(hidden_size)
 
   def forward(self, x):
-    t = self.norm(x)
+    if self.has_norm:
+      t = self.norm(x)
+    else:
+      t = x
     t = self.swiglu(t)
     return t + x
 
 
 class TransformerBlock(nn.Module):
-  def __init__(self, hidden_size=256, n_heads=8):
+  def __init__(self, hidden_size=256, n_heads=8, norm_fn=None):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
-    self.attn = AttentionBlock(hidden_size, n_heads)
-    self.mlp = MLP(hidden_size)
+    self.attn = AttentionBlock(hidden_size, n_heads, norm_fn=norm_fn)
+    self.mlp = MLP(hidden_size, norm_fn=norm_fn)
   
   def forward(self, x):
     x = self.attn(x)
@@ -171,25 +180,28 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-  def __init__(self, hidden_size=256, n_heads=8, n_layers=15, xy_size=5):
+  def __init__(self, hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=lambda d: RMSNorm(d, learnable=False)):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
     self.n_layers = n_layers
     self.xy_size = xy_size
-    self.blocks = nn.ModuleList([TransformerBlock(hidden_size, n_heads) for _ in range(n_layers)])
+    self.blocks = nn.ModuleList([TransformerBlock(hidden_size, n_heads, norm_fn=norm_fn) for _ in range(n_layers)])
     self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
     # emb should NOT use standard Xavier initialization
     # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1
     nn.init.normal_(self.embedding.weight, mean=0.0, std=(xy_size + 1)**-0.5)
-    self.norm = RMSNorm(hidden_size, learnable=False)
+    self.has_norm = norm_fn is not None
+    if self.has_norm:
+      self.norm = norm_fn(hidden_size)
     self.unembedding = nn.Linear(hidden_size, xy_size, bias=False)
   
   def forward(self, x):
     x = self.embedding(x)
     for block in self.blocks:
       x = block(x)
-    x = self.norm(x)
+    if self.has_norm:
+      x = self.norm(x)
     x = self.unembedding(x)
     return x
 

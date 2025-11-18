@@ -45,33 +45,50 @@ def resolve_device_and_saver(device_str: str):
     return device, save_fn, optimizer_step_fn
 
 
+def save_checkpoint(model, optimizer, step, epoch, path, scheduler=None):
+    ckpt = {
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict() if scheduler else None,
+        "step": step,
+        "epoch": epoch,
+        "rng_state": torch.random.get_rng_state(),
+        "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
+    }
+
+    torch.save(ckpt, path)
+    print(f"[checkpoint] saved to {path}")
+
+
+def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
+    ckpt = torch.load(path, map_location=device)
+    model.load_state_dict(ckpt["model"])
+    optimizer.load_state_dict(ckpt["optimizer"])
+    if scheduler and ckpt["scheduler"]:
+        scheduler.load_state_dict(ckpt["scheduler"])
+    torch.random.set_rng_state(ckpt["rng_state"])
+    if ckpt["cuda_rng_state"] is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state(ckpt["cuda_rng_state"])
+    print(f"[checkpoint] resumed from {path}")
+    return ckpt["step"], ckpt["epoch"]
+
+
 def train(
-    model, #Should be a transformer model
-    optimizer, #Could be AdamW, ManifoldMuonW, or MuonW
-    logger, #Should be a wandb logger
+    model,
+    optimizer,
+    logger,
     *,
-    get_batch, #Function that returns tokens, X, Y, W, and indices of tokens that refer to X tokens
+    get_batch,
     batch_size=8,
     num_pairs=5,
     xy_size=5,
     num_steps=1000,
-    device="cuda", #Could be "TPU", "cuda", "cpu"
+    device="cuda",
     verbose=True,
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
 ):
-    """
-    Train model on synthetic least-squares data.
-
-    Assumes:
-      - get_batch(...) returns (tokens, X, Y, W, x_token_indices)
-      - tokens: (B, T_seq, token_dim)
-      - X, Y:  (B, num_pairs, xy_size)
-      - model(tokens) -> (B, T_seq, xy_size)
-      - x_token_indices: positions where *x* is input; outputs at these
-        positions are interpreted as predictions of the next y.
-    """
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
     model.train()
@@ -89,25 +106,13 @@ def train(
             xy_size=xy_size,
             device=device,
         )
-        # tokens, X, Y, etc. should already be on the right device
-
-        # FWD
-        outputs = model(tokens)               # (B, T_seq, xy_size)
-
+        outputs = model(tokens)
         B, S, D = outputs.shape
-        # Gather predictions at x-token positions
-        # x_token_indices: 1D tensor (num_pairs,) of time indices
-        # We want outputs[:, x_token_indices, :] -> (B, num_pairs, xy_size)
-
-        b_idx = torch.arange(B, device=device).unsqueeze(1).expand(B, S)
-
-        y_pred = outputs[b_idx, x_token_indices, :]
-
-        # Least-squares / MSE loss between predicted y’s and true Y
+        b_idx = torch.arange(B, device=device).unsqueeze(1)
+        y_pred = outputs[b_idx, x_token_indices, 2+xy_size:]
         loss = torch.sum((y_pred-Y)**2, dim=1).mean()
 
-        # BWD
-        optimizer.zero_grad(set_to_none=True)
+        optimizer.zero_grad()
         loss.backward()
         optimizer_step_fn(optimizer)
 
