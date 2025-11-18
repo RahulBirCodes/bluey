@@ -6,12 +6,12 @@ import itertools
 import hashlib
 from collections import deque
 import time
-import torch_xla
 import wandb
 import datetime
 
 # Optional TPU support
 try:
+    import torch_xla
     import torch_xla.core.xla_model as xm
     HAS_XLA = True
 except ImportError:
@@ -234,11 +234,11 @@ def _run_single_config(
     make_model,
     optimizer_name: str,
     optimizer_class,
-    xy_size: int,
-    num_pairs: int,
     hparams: dict,
-    *,
     get_batch,
+    num_pairs: int,
+    xy_size: int,
+    *,
     num_steps: int,
     device: str,
     project_name: str,
