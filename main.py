@@ -1,5 +1,5 @@
 import torch
-
+import argparse
 from scripts import training as t
 from scripts import dataset as d
 from model.model import make_model
@@ -22,8 +22,7 @@ HYPERPARAM_GRID_ADAMW = {
 }
 
 HYPERPARAM_GRID_MUON = {
-    "lr_matrix": [1e-3, 3e-3, 1e-2, 2e-2, 3e-2],
-    "lr_scalar": [1e-4, 3e-4, 1e-3, 3e-3],
+    "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2], #According to Muon is Scalable for LLM Training, scaling Muon allows for reusing lr and weight decay tuned for AdamW
     "momentum": [0.9, 0.95, 0.98],  # often you’ll just fix 0.95
     "weight_decay": [0.0, 0.01, 0.1],
     "batch_size": [64, 128, 256, 512, 1024],
@@ -37,34 +36,126 @@ HYPERPARAM_GRID_LION = {
     "batch_size": [64, 128, 256, 512, 1024],
 }
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Hyperparameter sweep driver for bluey least-squares Transformer."
+    )
+
+    parser.add_argument(
+        "--optimizer",
+        "-o",
+        choices=list(OPTIMIZERS.keys()),
+        default="AdamW",
+        help="Which optimizer to use (default: AdamW)",
+    )
+
+    parser.add_argument(
+        "--device",
+        "-d",
+        default="auto",
+        help='Device to use: "auto", "cpu", "cuda", or "tpu" (default: auto)',
+    )
+
+    parser.add_argument(
+        "--phase",
+        "--experiment-phase",
+        default="sweep",
+        help='Experiment phase label, e.g. "sweep", "exp1" (default: "sweep")',
+    )
+
+    parser.add_argument(
+        "--num-steps",
+        type=int,
+        default=50_000,
+        help="Number of training steps per run (default: 50000)",
+    )
+
+    parser.add_argument(
+        "--architectures",
+        "-a",
+        default="rms",
+        help='Comma-separated list of architectures, e.g. "rms,standard" (default: "rms,standard")',
+    )
+
+    parser.add_argument(
+        "--project-name",
+        default="bluey-merdifold",
+        help="Weights & Biases project name (default: bluey-merdifold)",
+    )
+
+    parser.add_argument(
+        "--base-ckpt-dir",
+        default="checkpoints",
+        help='Base directory for checkpoints (default: "checkpoints")',
+    )
+
+    parser.add_argument(
+        "--print-config",
+        action="store_true",
+        help="Print the resolved configuration before running sweeps.",
+    )
+
+    return parser.parse_args()
+
+
+def _select_hyperparam_grid(optimizer_name: str) -> dict:
+    if optimizer_name == "AdamW":
+        return HYPERPARAM_GRID_ADAMW
+    elif optimizer_name in ("MuonW", "ManifoldMuonW"):
+        return HYPERPARAM_GRID_MUON
+    # elif optimizer_name == "Lion":
+    #     return HYPERPARAM_GRID_LION
+    else:
+        raise ValueError(f"No hyperparameter grid defined for optimizer {optimizer_name!r}")
+
+
+def _resolve_device(device_arg: str) -> str:
+    device_arg = device_arg.lower()
+    if device_arg == "auto":
+        if torch.cuda.is_available():
+            return "cuda"
+        else:
+            return "cpu"
+    else:
+        return device_arg
+
+
+def main(args: argparse.Namespace | None = None):
+    if args is None:
+        args = parse_args()
+
     # -----------------------------
     # 1. Choose optimizer + device
     # -----------------------------
-    optimizer_name = "AdamW"  # change to "MuonW", "ManifoldMuonW", etc. as needed
+    optimizer_name = args.optimizer
     optimizer_class = OPTIMIZERS[optimizer_name]
 
-
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"   # set "tpu" manually if you want to use XLA + your resolve_device logic
+    device = _resolve_device(args.device)
 
     # -----------------------------
     # 2. Define hyperparameter grid
     # -----------------------------
-    hyperparam_grid = {
-        "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
-        "weight_decay": [0.8, 0.9, 0.95, 1.0],
-        "betas": [],
-        "batch_size": [8, 16, 32, 64, 128, 256, 512, 1024],
-        "num_pairs": [30],
-        "xy_size": [5],
-    }
+    hyperparam_grid = _select_hyperparam_grid(optimizer_name)
 
-    model_architectures = ["rms", "standard"]
+    model_architectures = [
+        arch.strip()
+        for arch in args.architectures.split(",")
+        if arch.strip()
+    ]
 
-    num_steps = 50_000  # training steps per run
+    num_steps = args.num_steps
+
+    if args.print_config:
+        print("=== CONFIG ===")
+        print(f"optimizer_name: {optimizer_name}")
+        print(f"device:         {device}")
+        print(f"phase:          {args.phase}")
+        print(f"num_steps:      {num_steps}")
+        print(f"architectures:  {model_architectures}")
+        print(f"project_name:   {args.project_name}")
+        print(f"base_ckpt_dir:  {args.base_ckpt_dir}")
+        print("hyperparam_grid keys:", list(hyperparam_grid.keys()))
+        print("===============")
 
     # -----------------------------
     # 3. Run sweep
@@ -75,17 +166,17 @@ def main():
     print(f"Hyperparameter grid: {hyperparam_grid}")
 
     results = t.hyperparameter_sweep(
-        experiment_phase="sweep",          # "sweep", "exp1", etc.
+        experiment_phase=args.phase,           # e.g. "sweep", "exp1"
         model_architectures=model_architectures,
-        make_model=make_model,             # callable arch_name -> Transformer
-        optimizer_name=optimizer_name,     # e.g. "AdamW"
-        optimizer_class=optimizer_class,   # e.g. torch.optim.AdamW
-        hyperparam_grid=HYPERPARAM_GRID_ADAMW,
+        make_model=make_model,                
+        optimizer_name=optimizer_name,
+        optimizer_class=optimizer_class,
+        hyperparam_grid=hyperparam_grid,
         get_batch=d.get_batch,
         num_steps=num_steps,
         device=device,
-        project_name="bluey-merdifold",
-        base_ckpt_dir="checkpoints",
+        project_name=args.project_name,
+        base_ckpt_dir=args.base_ckpt_dir,
         last_k=50,
     )
 
@@ -101,13 +192,6 @@ def main():
         print("=" * 60)
         return
 
-    # We defined hyperparameter_sweep to return a list of dicts like:
-    # {
-    #   "experiment_phase", "optimizer", "arch",
-    #   "hparams", "ckpt_dir",
-    #   "run_name", "group_name",
-    #   "final_eval_loss", "avg_last_k_train_loss",
-    # }
     best_run = min(results, key=lambda r: r["final_eval_loss"])
     best_hparams = best_run["hparams"]
 
@@ -131,7 +215,6 @@ def main():
         )
 
     print("=" * 60)
-
 
 if __name__ == "__main__":
     main()

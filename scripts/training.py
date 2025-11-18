@@ -36,6 +36,7 @@ def resolve_device_and_saver(device_str: str):
 
         def optimizer_step_fn(optimizer):
             xm.optimizer_step(optimizer)
+            xm.mark_step()
 
     else:
         device = torch.device(device_str)
@@ -126,9 +127,9 @@ def train(
 
         # --- Checkpointing ---
         if checkpoint_dir is not None and (step + 1) % checkpoint_every == 0:
-            current_time = datetime.time()
-
-            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}{current_time}.pt")
+            now = datetime.datetime.now()  # or datetime.datetime.utcnow()
+            timestamp = now.strftime("%Y%m%d-%H%M%S")  # e.g. 20251118-123045
+            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}_{timestamp}.pt")
             state = {
                 "step": step + 1,
                 "model_state": model.state_dict(),
@@ -187,7 +188,7 @@ class WandbLossLogger:
         self.run.finish()
 
 
-def _short_hparam_str(hparams: dict, max_len: int = 40) -> str:
+def _short_hparam_str(hparams: dict, max_len: int =60) -> str:
     """
     Turn a small hyperparam dict into a compact, filesystem-safe string.
     Example: {'lr':1e-3,'wd':0.1} -> 'lr1e-3_wd0.1' (possibly truncated + hash).
