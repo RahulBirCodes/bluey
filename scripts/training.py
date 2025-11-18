@@ -43,13 +43,12 @@ def resolve_device_and_saver(device_str: str):
     return device, save_fn, optimizer_step_fn
 
 
-def save_checkpoint(model, optimizer, step, epoch, path, scheduler=None):
+def save_checkpoint(model, optimizer, step, path, scheduler=None):
     ckpt = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict() if scheduler else None,
         "step": step,
-        "epoch": epoch,
         "rng_state": torch.random.get_rng_state(),
         "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
     }
@@ -68,7 +67,38 @@ def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
     if ckpt["cuda_rng_state"] is not None and torch.cuda.is_available():
         torch.cuda.set_rng_state(ckpt["cuda_rng_state"])
     print(f"[checkpoint] resumed from {path}")
-    return ckpt["step"], ckpt["epoch"]
+    return ckpt["step"]
+
+
+class WarmupConstantDecayLrScheduler:
+    def __init__(self, optimizer, total_steps, warmup_ratio=0.02, decay_ratio=0.10):
+        self.optimizer = optimizer
+        self.total_steps = total_steps
+        self.warmup_steps = int(total_steps * warmup_ratio)
+        self.decay_steps = int(total_steps * decay_ratio)
+        self.decay_start = total_steps - self.decay_steps
+        self.base_lrs = [g['lr'] for g in optimizer.param_groups]
+        self.last_step = 0
+
+    def state_dict(self):
+        return {"last_step": self.last_step}
+
+    def load_state_dict(self, state):
+        self.last_step = state["last_step"]
+
+    def step(self):
+        step = self.last_step
+        if step < self.warmup_steps and warmup_steps != 0:
+            scale = step / self.warmup_steps
+        elif step < self.decay_start:
+            scale = 1.0
+        else:
+            remaining = max(1, self.total_steps - self.decay_start)
+            scale = max(0.0, 1 - (step - self.decay_start) / remaining)
+
+        for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups):
+            group["lr"] = base_lr * scale
+        self.last_step += 1
 
 
 def train(
@@ -86,6 +116,8 @@ def train(
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
+    resume_from=None,
+    scheduler=None
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
@@ -93,8 +125,12 @@ def train(
 
     if checkpoint_dir is not None:
         os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    prev_step = 0
+    if resume_from is not None:
+        prev_step = load_checkpoint(model, optimizer, resume_from, scheduler=scheduler, device=device)
 
-    for step in range(num_steps):
+    for step in range(prev_step, num_steps):
         tokens, X, Y, W, x_token_indices = get_batch(
             batch_size=batch_size,
             num_pairs=num_pairs,
@@ -110,8 +146,9 @@ def train(
         optimizer.zero_grad()
         loss.backward()
         optimizer_step_fn(optimizer)
+        if scheduler is not None:
+            scheduler.step()
 
-        # --- Checkpointing ---
         if checkpoint_dir is not None and (step + 1) % checkpoint_every == 0:
             ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}.pt")
             state = {
@@ -119,16 +156,15 @@ def train(
                 "model_state": model.state_dict(),
                 "optimizer_state": optimizer.state_dict(),
                 "loss": loss.item(),
+                "scheduler": schedular.state_dict()
             }
             save_fn(state, ckpt_path)
             if verbose:
                 print(f"[Step {step}] Saved checkpoint to {ckpt_path}")
 
-        # --- Print logging ---
         if verbose and (step % print_interval == 0):
             print(f"[Step {step}] loss = {loss.item():.6f}")
 
-        # --- WandB logging ---
         if logger is not None:
             logger.log({"loss": loss.item(), "step": step})
 
@@ -208,9 +244,7 @@ def _run_single_config(
     Run a single (arch, hyperparam config) training job.
     Returns a dict with summary stats.
     """
-    # --- Build names/paths ---
-    hparam_str = _short_hparam_str(hparams)  # e.g. 'lr1e-3_wd0.1'
-    # Checkpoint dir tree:
+    hparam_str = _short_hparam_str(hparams)
     # base_ckpt_dir/phase/optimizer/arch/hparam_str/
     ckpt_dir = os.path.join(
         base_ckpt_dir,
@@ -221,11 +255,8 @@ def _run_single_config(
     )
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    # WandB run name & group
     run_name = f"{experiment_phase}-{optimizer_name}-{arch_name}-{hparam_str}"
-    # Optionally use group to mirror phase/optimizer/arch
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
-
     run = wandb.init(
         project=project_name,
         name=run_name[:128],  # wandb name limit
@@ -242,11 +273,8 @@ def _run_single_config(
     )
     logger = WandbLossLogger(run, last_k=last_k)
 
-    # --- Build model & optimizer ---
     model = make_model(arch_name)
     optimizer = optimizer_class(model.parameters(), **hparams)
-
-    # --- Train ---
     model = train(
         model=model,
         optimizer=optimizer,
@@ -318,7 +346,6 @@ def hyperparameter_sweep(
     project_name: str = "bluey-merdifold",
     base_ckpt_dir: str = "checkpoints",
     last_k: int = 50,
-    use_ray: bool = False,
 ):
     """
     Run a grid search over hyperparameters *and* architectures
