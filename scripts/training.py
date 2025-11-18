@@ -171,8 +171,8 @@ def train(
             iter_sec = time.time() - iter_start
             logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
 
-    if logger is not None:
-        logger.finish()
+    # if logger is not None:
+    #     logger.finish()
 
     return model
 
@@ -314,7 +314,7 @@ def _run_single_config(
         avg_last_k_loss = sum(logger.last_k) / len(logger.last_k)
     else:
         avg_last_k_loss = float("nan")
-    wandb.log({"avg_last_k_train_loss": avg_last_k_loss})
+    run.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
 
     return {
