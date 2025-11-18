@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 import wandb
-print(wandb.__file__)
 import os
 import itertools
 import hashlib
@@ -21,12 +20,6 @@ except ImportError:
 def resolve_device_and_saver(device_str: str):
     """
     Returns (torch.device-like, save_fn, optimizer_step_fn).
-
-    device_str:
-      - "cpu"      → CPU
-      - "cuda"     → current CUDA device
-      - "cuda:0"   → specific CUDA device
-      - "tpu"      → XLA device (requires torch_xla)
     """
     if device_str.lower() == "tpu":
         if not HAS_XLA:
@@ -48,13 +41,12 @@ def resolve_device_and_saver(device_str: str):
     return device, save_fn, optimizer_step_fn
 
 
-def save_checkpoint(model, optimizer, step, epoch, path, scheduler=None):
+def save_checkpoint(model, optimizer, step, path, scheduler=None):
     ckpt = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict() if scheduler else None,
         "step": step,
-        "epoch": epoch,
         "rng_state": torch.random.get_rng_state(),
         "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
     }
@@ -73,7 +65,38 @@ def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
     if ckpt["cuda_rng_state"] is not None and torch.cuda.is_available():
         torch.cuda.set_rng_state(ckpt["cuda_rng_state"])
     print(f"[checkpoint] resumed from {path}")
-    return ckpt["step"], ckpt["epoch"]
+    return ckpt["step"]
+
+
+class WarmupConstantDecayLrScheduler:
+    def __init__(self, optimizer, total_steps, warmup_ratio=0.02, decay_ratio=0.10):
+        self.optimizer = optimizer
+        self.total_steps = total_steps
+        self.warmup_steps = int(total_steps * warmup_ratio)
+        self.decay_steps = int(total_steps * decay_ratio)
+        self.decay_start = total_steps - self.decay_steps
+        self.base_lrs = [g['lr'] for g in optimizer.param_groups]
+        self.last_step = 0
+
+    def state_dict(self):
+        return {"last_step": self.last_step}
+
+    def load_state_dict(self, state):
+        self.last_step = state["last_step"]
+
+    def step(self):
+        step = self.last_step
+        if step < self.warmup_steps and warmup_steps != 0:
+            scale = step / self.warmup_steps
+        elif step < self.decay_start:
+            scale = 1.0
+        else:
+            remaining = max(1, self.total_steps - self.decay_start)
+            scale = max(0.0, 1 - (step - self.decay_start) / remaining)
+
+        for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups):
+            group["lr"] = base_lr * scale
+        self.last_step += 1
 
 
 def train(
@@ -91,39 +114,39 @@ def train(
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
+    resume_from=None,
+    scheduler=None
 ):
-    
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
     model.train()
 
     if checkpoint_dir is not None:
         os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    prev_step = 0
+    if resume_from is not None:
+        prev_step = load_checkpoint(model, optimizer, resume_from, scheduler=scheduler, device=device)
 
-    for step in range(num_steps):
+    for step in range(prev_step, num_steps):
         iter_start = time.time()
-        # --- Generate fresh synthetic batch every step ---
-        # Yes: for synthetic LS tasks, it's standard to resample each iteration.
         tokens, X, Y, W, x_token_indices = get_batch(
             batch_size=batch_size,
             num_pairs=num_pairs,
             xy_size=xy_size,
             device=device,
         )
-
-        #I want x_token_indices to be shape B x num_pairs, with each element being the index of 
-        #the next x_token
         outputs = model(tokens)
         B, S, D = outputs.shape
-        #print(outputs.shape)
         b_idx = torch.arange(B, device=device).unsqueeze(1)
-
         y_pred = outputs[b_idx, x_token_indices, :]
         loss = torch.sum((y_pred-Y)**2, dim=1).mean()
 
         optimizer.zero_grad()
         loss.backward()
         optimizer_step_fn(optimizer)
+        if scheduler is not None:
+            scheduler.step()
 
         # --- Checkpointing ---
         if checkpoint_dir is not None and (step + 1) % checkpoint_every == 0:
@@ -135,38 +158,23 @@ def train(
                 "model_state": model.state_dict(),
                 "optimizer_state": optimizer.state_dict(),
                 "loss": loss.item(),
+                "scheduler": scheduler.state_dict()
             }
             save_fn(state, ckpt_path)
             if verbose:
                 print(f"[Step {step}] Saved checkpoint to {ckpt_path}")
 
-        # --- Print logging ---
         if verbose and (step % print_interval == 0):
             print(f"[Step {step}] loss = {loss.item():.6f}")
 
-        # --- WandB logging ---
         if logger is not None:
             iter_sec = time.time() - iter_start
-            logger.log({"loss": loss.item(), "step": step, "iter_sec": iter_sec})
+            logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
 
     if logger is not None:
         logger.finish()
 
     return model
-
-
-def load_checkpoint(model, optimizer, filepath, device="cuda"):
-    """
-    Device-aware checkpoint loading.
-    """
-    device_obj, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
-    checkpoint = torch.load(filepath, map_location=device_obj)
-    model.load_state_dict(checkpoint["model_state"])
-    optimizer.load_state_dict(checkpoint["optimizer_state"])
-    step = checkpoint["step"]
-    loss = checkpoint["loss"]
-    model.to(device_obj)
-    return model, optimizer, step, loss
 
 
 class WandbLossLogger:
@@ -226,6 +234,8 @@ def _run_single_config(
     make_model,
     optimizer_name: str,
     optimizer_class,
+    xy_size: int,
+    num_pairs: int,
     hparams: dict,
     *,
     get_batch,
@@ -239,9 +249,7 @@ def _run_single_config(
     Run a single (arch, hyperparam config) training job.
     Returns a dict with summary stats.
     """
-    # --- Build names/paths ---
-    hparam_str = _short_hparam_str(hparams)  # e.g. 'lr1e-3_wd0.1'
-    # Checkpoint dir tree:
+    hparam_str = _short_hparam_str(hparams)
     # base_ckpt_dir/phase/optimizer/arch/hparam_str/
 
     current_time = time.time()
@@ -257,11 +265,8 @@ def _run_single_config(
     )
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    # WandB run name & group
-    run_name = f"{experiment_phase}-{optimizer_name}-{arch_name}-{hparam_str}"
-    # Optionally use group to mirror phase/optimizer/arch
+    run_name = f"{hparam_str}"
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
-
     run = wandb.init(
         project=project_name,
         name=run_name[:128],  # wandb name limit
@@ -278,82 +283,38 @@ def _run_single_config(
     )
     logger = WandbLossLogger(run, last_k=last_k)
 
-    # --- Build model & optimizer ---
     model = make_model(arch_name)
-    
     opt_kwargs = {}
-    
     if "lr" in hparams:
         opt_kwargs["lr"] = hparams["lr"]
     if "weight_decay" in hparams:
         opt_kwargs["weight_decay"] = hparams["weight_decay"]
-
-    # Handle beta1 / beta2 -> betas, if they exist
     if "beta1" in hparams and "beta2" in hparams:
         opt_kwargs["betas"] = (hparams["beta1"], hparams["beta2"])
-
-    # Muon / Manifold Muon might have other fields, e.g. "momentum"
-    # Pass any remaining optimizer-specific keys explicitly if you need:
     for k in ["momentum", "nesterov"]:
         if k in hparams:
             opt_kwargs[k] = hparams[k]
-
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
-    # --- Train ---
     model = train(
         model=model,
         optimizer=optimizer,
         logger=logger,
         get_batch=get_batch,
         batch_size=hparams.get("batch_size", 8),
-        num_pairs=hparams.get("num_pairs", 5),
-        xy_size=hparams.get("xy_size", 5),
+        num_pairs=num_pairs,
+        xy_size=xy_size,
         num_steps=num_steps,
         device=device,
         checkpoint_every=hparams.get("checkpoint_every", 50),
         checkpoint_dir=ckpt_dir,
         verbose=True,
     )
-
-    # --- Summaries ---
-    # Average of last K training losses
     if len(logger.last_k) > 0:
         avg_last_k_loss = sum(logger.last_k) / len(logger.last_k)
     else:
         avg_last_k_loss = float("nan")
-
-    # Evaluate on a fresh synthetic batch as a "final loss"
-    model.eval()
-    with torch.no_grad():
-        tokens, X, Y, W, x_token_indices = get_batch(
-            batch_size=hparams.get("eval_batch_size", 8),
-            num_pairs=hparams.get("num_pairs", 5),
-            xy_size=hparams.get("xy_size", 5),
-            device=device,
-        )
-        
-        # FWD
-        outputs = model(tokens)               # (B, T_seq, xy_size)
-
-        B, S, D = outputs.shape
-        # Gather predictions at x-token positions
-        # x_token_indices: 1D tensor (num_pairs,) of time indices
-        # We want outputs[:, x_token_indices, :] -> (B, num_pairs, xy_size)
-
-        b_idx = torch.arange(B, device=device).unsqueeze(1).expand(B, S)
-
-        y_pred = outputs[b_idx, x_token_indices, :]
-        # Least-squares / MSE loss between predicted y’s and true Y
-        final_loss = torch.sum((y_pred-Y)**2, dim=1).mean()
-
-    wandb.log(
-        {
-            "final_eval_loss": final_loss,
-            "avg_last_k_train_loss": avg_last_k_loss,
-        }
-    )
-
+    wandb.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
 
     return {
@@ -364,17 +325,18 @@ def _run_single_config(
         "ckpt_dir": ckpt_dir,
         "run_name": run_name,
         "group_name": group_name,
-        "final_eval_loss": final_loss,
         "avg_last_k_train_loss": avg_last_k_loss,
     }
 
 def hyperparameter_sweep(
-    experiment_phase: str,           # "sweep", "exp1", etc.
-    model_architectures: list[str],  # ["ln", "no_ln_resnet", ...]
-    make_model,                      # callable arch_name -> nn.Module
-    optimizer_name: str,             # "AdamW", "MuonW", "ManifoldMuonW"
-    optimizer_class,                 # e.g. torch.optim.AdamW
+    experiment_phase: str,
+    model_architectures: list[str],
+    make_model,
+    optimizer_name: str,
+    optimizer_class,
     hyperparam_grid: dict[str, list],
+    xy_size: int,
+    num_pairs: int,
     *,
     get_batch,
     num_steps: int,
@@ -388,13 +350,7 @@ def hyperparameter_sweep(
     for a given optimizer, with organized wandb + checkpoint structure.
 
     Returns:
-        results: list of dicts, each with keys:
-            - experiment_phase, optimizer, arch
-            - hparams (dict)
-            - ckpt_dir
-            - run_name, group_name
-            - final_eval_loss
-            - avg_last_k_train_loss
+        results: list of training run results
     """
     results = []
     
@@ -409,6 +365,8 @@ def hyperparameter_sweep(
                     optimizer_class,
                     hparams,
                     get_batch=get_batch,
+                    num_pairs=num_pairs,
+                    xy_size=xy_size,
                     num_steps=num_steps,
                     device=device,
                     project_name=project_name,

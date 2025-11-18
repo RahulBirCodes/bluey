@@ -157,9 +157,6 @@ def main(args: argparse.Namespace | None = None):
         print("hyperparam_grid keys:", list(hyperparam_grid.keys()))
         print("===============")
 
-    # -----------------------------
-    # 3. Run sweep
-    # -----------------------------
     print(f"Starting hyperparameter sweep for optimizer = {optimizer_name}")
     print(f"Device: {device}")
     print(f"Architectures: {model_architectures}")
