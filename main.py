@@ -63,7 +63,7 @@ def main():
 
     model_architectures = ["rms", "standard"]
 
-    num_steps = 10_000  # training steps per run
+    num_steps = 50_000  # training steps per run
 
     # -----------------------------
     # 3. Run sweep

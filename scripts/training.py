@@ -264,7 +264,25 @@ def _run_single_config(
 
     # --- Build model & optimizer ---
     model = make_model(arch_name)
-    optimizer = optimizer_class(model.parameters(), **hparams)
+    
+    opt_kwargs = {}
+    
+    if "lr" in hparams:
+        opt_kwargs["lr"] = hparams["lr"]
+    if "weight_decay" in hparams:
+        opt_kwargs["weight_decay"] = hparams["weight_decay"]
+
+    # Handle beta1 / beta2 -> betas, if they exist
+    if "beta1" in hparams and "beta2" in hparams:
+        opt_kwargs["betas"] = (hparams["beta1"], hparams["beta2"])
+
+    # Muon / Manifold Muon might have other fields, e.g. "momentum"
+    # Pass any remaining optimizer-specific keys explicitly if you need:
+    for k in ["momentum", "nesterov"]:
+        if k in hparams:
+            opt_kwargs[k] = hparams[k]
+
+    optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
     # --- Train ---
     model = train(
