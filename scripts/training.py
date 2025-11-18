@@ -5,6 +5,8 @@ import os
 import itertools
 import hashlib
 from collections import deque
+import time
+
 import wandb
 
 # Optional TPU support
@@ -95,6 +97,9 @@ def train(
         os.makedirs(checkpoint_dir, exist_ok=True)
 
     for step in range(num_steps):
+        iter_start = time.time()
+        # --- Generate fresh synthetic batch every step ---
+        # Yes: for synthetic LS tasks, it's standard to resample each iteration.
         tokens, X, Y, W, x_token_indices = get_batch(
             batch_size=batch_size,
             num_pairs=num_pairs,
@@ -130,12 +135,27 @@ def train(
 
         # --- WandB logging ---
         if logger is not None:
-            logger.log({"loss": loss.item(), "step": step})
+            iter_sec = time.time() - iter_start
+            logger.log({"loss": loss.item(), "step": step, "iter_sec": iter_sec})
 
     if logger is not None:
         logger.finish()
 
     return model
+
+
+def load_checkpoint(model, optimizer, filepath, device="cuda"):
+    """
+    Device-aware checkpoint loading.
+    """
+    device_obj, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
+    checkpoint = torch.load(filepath, map_location=device_obj)
+    model.load_state_dict(checkpoint["model_state"])
+    optimizer.load_state_dict(checkpoint["optimizer_state"])
+    step = checkpoint["step"]
+    loss = checkpoint["loss"]
+    model.to(device_obj)
+    return model, optimizer, step, loss
 
 
 class WandbLossLogger:
@@ -157,7 +177,7 @@ class WandbLossLogger:
         self.run.finish()
 
 
-def _short_hparam_str(hparams: dict, max_len: int = 30) -> str:
+def _short_hparam_str(hparams: dict, max_len: int = 40) -> str:
     """
     Turn a small hyperparam dict into a compact, filesystem-safe string.
     Example: {'lr':1e-3,'wd':0.1} -> 'lr1e-3_wd0.1' (possibly truncated + hash).
@@ -244,7 +264,25 @@ def _run_single_config(
 
     # --- Build model & optimizer ---
     model = make_model(arch_name)
-    optimizer = optimizer_class(model.parameters(), **hparams)
+    
+    opt_kwargs = {}
+    
+    if "lr" in hparams:
+        opt_kwargs["lr"] = hparams["lr"]
+    if "weight_decay" in hparams:
+        opt_kwargs["weight_decay"] = hparams["weight_decay"]
+
+    # Handle beta1 / beta2 -> betas, if they exist
+    if "beta1" in hparams and "beta2" in hparams:
+        opt_kwargs["betas"] = (hparams["beta1"], hparams["beta2"])
+
+    # Muon / Manifold Muon might have other fields, e.g. "momentum"
+    # Pass any remaining optimizer-specific keys explicitly if you need:
+    for k in ["momentum", "nesterov"]:
+        if k in hparams:
+            opt_kwargs[k] = hparams[k]
+
+    optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
     # --- Train ---
     model = train(
@@ -278,9 +316,20 @@ def _run_single_config(
             xy_size=hparams.get("xy_size", 5),
             device=device,
         )
-        outputs = model(tokens)
-        y_pred = outputs[:, x_token_indices, :]
-        final_loss = torch.nn.functional.mse_loss(y_pred, Y).item()
+        
+        # FWD
+        outputs = model(tokens)               # (B, T_seq, xy_size)
+
+        B, S, D = outputs.shape
+        # Gather predictions at x-token positions
+        # x_token_indices: 1D tensor (num_pairs,) of time indices
+        # We want outputs[:, x_token_indices, :] -> (B, num_pairs, xy_size)
+
+        b_idx = torch.arange(B, device=device).unsqueeze(1).expand(B, S)
+
+        y_pred = outputs[b_idx, x_token_indices, :]
+        # Least-squares / MSE loss between predicted y’s and true Y
+        final_loss = torch.sum((y_pred-Y)**2, dim=1).mean()
 
     wandb.log(
         {
@@ -303,10 +352,9 @@ def _run_single_config(
         "avg_last_k_train_loss": avg_last_k_loss,
     }
 
-
 def hyperparameter_sweep(
     experiment_phase: str,           # "sweep", "exp1", etc.
-    model_architectures: list[str],  # ["ln", "no_ln_resnet", ...]
+    model_architectures: list[list[str]],  # ["ln", "no_ln_resnet", ...]
     make_model,                      # callable arch_name -> nn.Module
     optimizer_name: str,             # "AdamW", "MuonW", "ManifoldMuonW"
     optimizer_class,                 # e.g. torch.optim.AdamW
@@ -318,7 +366,6 @@ def hyperparameter_sweep(
     project_name: str = "bluey-merdifold",
     base_ckpt_dir: str = "checkpoints",
     last_k: int = 50,
-    use_ray: bool = False,
 ):
     """
     Run a grid search over hyperparameters *and* architectures
@@ -352,6 +399,6 @@ def hyperparameter_sweep(
                     last_k=last_k,
                 )
                 results.append(summary)
-                
+
     return results
 

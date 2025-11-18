@@ -4,7 +4,6 @@ from optimizers.msign import msign
 import math
 import torch
 
-
 def manifold_muon_step(
     W: torch.Tensor,
     G: torch.Tensor,
