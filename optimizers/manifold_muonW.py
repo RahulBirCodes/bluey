@@ -59,8 +59,8 @@ def manifold_muon_ADMM_step(
 ) -> torch.Tensor:
     """Implements GD on || G + W @ (L + L.mT) ||_* (c.f. the blog)"""
     # Ensure that W and G are both tall matrices
-    should_tranpose = W.shape[0] < W.shape[1]
-    if should_tranpose:
+    should_transpose = W.shape[0] < W.shape[1]
+    if should_transpose:
         W = W.T
         G = G.T
     # Initialize the lagrangian, slack, and dual variable
@@ -84,11 +84,11 @@ def manifold_muon_ADMM_step(
     # (at convergence, G + 2 * W @ Lambda \approx X)
     A = msign(G + 2 * W @ Lambda)
     # Descend on the primal problem
-    new_W = W - eta * A
+    new_W = W - lr * A
     # Retract to the manifold
     new_W = msign(new_W)
     # Restore the shape of the solution and return
-    return new_W.T if should_tranpose else new_W
+    return new_W.T if should_transpose else new_W
 
 class ManifoldMuonW(Optimizer):
     """
@@ -110,6 +110,7 @@ class ManifoldMuonW(Optimizer):
         mm_alpha: float = 0.01,
         mm_tol: float = 1e-6,
         ADMM: bool = False,
+        mm_use_momentum: bool = False,
     ):
         if lr <= 0.0:
             raise ValueError(f"Invalid learning rate: {lr}")
@@ -128,6 +129,8 @@ class ManifoldMuonW(Optimizer):
             mm_steps=mm_steps,
             mm_alpha=mm_alpha,
             mm_tol=mm_tol,
+            ADMM=ADMM,
+            mm_use_momentum=mm_use_momentum,
         )
         super().__init__(params, defaults)
 
@@ -146,7 +149,8 @@ class ManifoldMuonW(Optimizer):
             mm_steps = group["mm_steps"]
             mm_alpha = group["mm_alpha"]
             mm_tol = group["mm_tol"]
-
+            mm_use_momentum = group.get("mm_use_momentum", False)
+            ADMM = group.get("ADMM", False)
             use_manifold = group.get("manifold", False)
 
             for p in group["params"]:
@@ -167,7 +171,7 @@ class ManifoldMuonW(Optimizer):
                     state["exp_avg"] = torch.zeros_like(p)
                     state["exp_avg_sq"] = torch.zeros_like(p)
                     # Muon-style momentum for manifold params
-                    #state["muon_m"] = torch.zeros_like(p)
+                    state["muon_m"] = torch.zeros_like(p)
 
                 state["step"] += 1
                 exp_avg, exp_avg_sq, muon_m = (
@@ -183,10 +187,14 @@ class ManifoldMuonW(Optimizer):
                 if use_manifold and p.ndim >= 2:
                     # ---- Manifold Muon branch: only use on matrix weights (e.g. Q/K/V) ----
                     # Use a Muon-style momentum as the "effective gradient"
-                    #muon_m.lerp_(grad, 1.0 - beta1)   # simple EMA; could tweak
+                    if mm_use_momentum:
+                        muon_m.lerp_(grad, 1.0 - beta1)   # simple EMA; could tweak
+                        G_eff = muon_m
+                    else:
+                        # No momentum: use raw grad
+                        G_eff = grad
 
                     W = p.data
-                    G_eff = grad
 
                     if ADMM:
                         new_W = manifold_muon_ADMM_step(
