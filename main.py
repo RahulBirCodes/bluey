@@ -51,7 +51,7 @@ def main():
         device = "cpu"   # set "tpu" manually if you want to use XLA + your resolve_device logic
 
     #Hardcode for colab test
-    device = "tpu"
+    device = "cpu"
     # -----------------------------
     # 2. Define hyperparameter grid
     # -----------------------------
@@ -82,7 +82,7 @@ def main():
         make_model=make_model,             # callable arch_name -> Transformer
         optimizer_name=optimizer_name,     # e.g. "AdamW"
         optimizer_class=optimizer_class,   # e.g. torch.optim.AdamW
-        hyperparam_grid=hyperparam_grid,
+        hyperparam_grid=HYPERPARAM_GRID_ADAMW,
         get_batch=d.get_batch,
         num_steps=num_steps,
         device=device,

@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import wandb
+print(wandb.__file__)
 import os
 import itertools
 import hashlib
@@ -89,6 +90,7 @@ def train(
     checkpoint_every=20,
     checkpoint_dir=None,
 ):
+    
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
     model.train()
@@ -106,9 +108,14 @@ def train(
             xy_size=xy_size,
             device=device,
         )
+
+        #I want x_token_indices to be shape B x num_pairs, with each element being the index of 
+        #the next x_token
         outputs = model(tokens)
         B, S, D = outputs.shape
-        b_idx = torch.arange(B, device=device).unsqueeze(1)
+        b_idx = torch.arange(B, device=device).unsqueeze(1).expand(B, S)
+
+        
         y_pred = outputs[b_idx, x_token_indices, 2+xy_size:]
         loss = torch.sum((y_pred-Y)**2, dim=1).mean()
 
@@ -354,7 +361,7 @@ def _run_single_config(
 
 def hyperparameter_sweep(
     experiment_phase: str,           # "sweep", "exp1", etc.
-    model_architectures: list[list[str]],  # ["ln", "no_ln_resnet", ...]
+    model_architectures: list[str],  # ["ln", "no_ln_resnet", ...]
     make_model,                      # callable arch_name -> nn.Module
     optimizer_name: str,             # "AdamW", "MuonW", "ManifoldMuonW"
     optimizer_class,                 # e.g. torch.optim.AdamW
@@ -384,6 +391,7 @@ def hyperparameter_sweep(
     
     for arch_name in model_architectures:
             for hparams in _iter_hparam_configs(hyperparam_grid):
+                print(hparams)
                 summary = _run_single_config(
                     experiment_phase,
                     arch_name,
