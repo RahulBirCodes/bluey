@@ -213,7 +213,5 @@ def make_model(arch_name):
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None
-
     transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln)
-
     return transformer
