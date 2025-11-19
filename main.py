@@ -89,10 +89,24 @@ def parse_args() -> argparse.Namespace:
         help='Base directory for checkpoints (default: "checkpoints")',
     )
 
+
+    parser.add_argument(
+        "--checkpoint_every",
+        type=int,
+        default=50,
+        help="Configure training loop to checkpoint every so many iterations",
+    )
+
     parser.add_argument(
         "--continue_checkpoint",
         action="store_true",
         help="Configure training loop to continue from found furthest checkpoint per iteration.",
+    )
+
+    parser.add_argument(
+        "--skip_complete",
+        action="store_true",
+        help="Skips completed checkpoints based off of wandb logging",
     )
 
     parser.add_argument(
@@ -101,7 +115,7 @@ def parse_args() -> argparse.Namespace:
         help="Print the resolved configuration before running sweeps.",
     )
 
-    
+
 
     return parser.parse_args()
 
@@ -162,6 +176,9 @@ def main(args: argparse.Namespace | None = None):
         print(f"architectures:  {model_architectures}")
         print(f"project_name:   {args.project_name}")
         print(f"base_ckpt_dir:  {args.base_ckpt_dir}")
+        print(f"continue_checkpoint:  {args.continue_checkpoint}")
+        print(f"skip_complete:  {args.skip_complete}")
+        print(f"checkpoint_every:  {args.checkpoint_every}")
         print("hyperparam_grid keys:", list(hyperparam_grid.keys()))
         print("===============")
 
@@ -177,6 +194,7 @@ def main(args: argparse.Namespace | None = None):
         optimizer_name=optimizer_name,
         optimizer_class=optimizer_class,
         hyperparam_grid=hyperparam_grid,
+        checkpoint_every=args.checkpoint_every,
         get_batch=d.get_batch,
         num_steps=num_steps,
         device=device,
@@ -184,6 +202,7 @@ def main(args: argparse.Namespace | None = None):
         base_ckpt_dir=args.base_ckpt_dir,
         last_k=50,
         continue_checkpoint=args.continue_checkpoint,
+        skip_complete=args.skip_complete,
     )
 
     # -----------------------------

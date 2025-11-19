@@ -8,6 +8,7 @@ from collections import deque
 import time
 import wandb
 import datetime
+import re
 
 # Optional TPU support
 try:
@@ -41,7 +42,7 @@ def resolve_device_and_saver(device_str: str):
     return device, save_fn, optimizer_step_fn
 
 
-def save_checkpoint(model, optimizer, step, path, scheduler=None):
+def save_checkpoint(model, optimizer, step: int, path: str, scheduler=None, save_fn=torch.save):
     ckpt = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -51,11 +52,11 @@ def save_checkpoint(model, optimizer, step, path, scheduler=None):
         "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
     }
 
-    torch.save(ckpt, path)
+    save_fn(ckpt, path)
     print(f"[checkpoint] saved to {path}")
 
 
-def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None):
+def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None) -> int:
     ckpt = torch.load(path, map_location=device)
     model.load_state_dict(ckpt["model"])
     optimizer.load_state_dict(ckpt["optimizer"])
@@ -114,7 +115,7 @@ def train(
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
-    resume_from: str="", #Should be the path for the most recent checkpoint
+    resume_from: str | None = None,
     scheduler=None,
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
@@ -125,9 +126,9 @@ def train(
         os.makedirs(checkpoint_dir, exist_ok=True)
     
     prev_step = 0
-    if resume_from is not "":
-        prev_step = load_checkpoint(model, optimizer, resume_from, scheduler=scheduler, device=device)
-    
+    if resume_from:
+        prev_step = load_checkpoint(model, optimizer, resume_from, device=device, scheduler=scheduler)
+       
     for step in range(prev_step, num_steps):
         iter_start = time.time()
         tokens, X, Y, W, x_token_indices = get_batch(
@@ -153,14 +154,14 @@ def train(
             now = datetime.datetime.now()  # or datetime.datetime.utcnow()
             timestamp = now.strftime("%Y%m%d-%H%M%S")  # e.g. 20251118-123045
             ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}_{timestamp}.pt")
-            state = {
-                "step": step + 1,
-                "model_state": model.state_dict(),
-                "optimizer_state": optimizer.state_dict(),
-                "loss": loss.item(),
-                "scheduler": scheduler.state_dict() if scheduler else None,
-            }
-            save_fn(state, ckpt_path)
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                step=step + 1,
+                path=ckpt_path,
+                scheduler=scheduler,
+                save_fn=save_fn,
+            )
             if verbose:
                 print(f"[Step {step}] Saved checkpoint to {ckpt_path}")
 
@@ -170,9 +171,6 @@ def train(
         if logger is not None:
             iter_sec = time.time() - iter_start
             logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
-
-    # if logger is not None:
-    #     logger.finish()
 
     return model
 
@@ -196,7 +194,7 @@ class WandbLossLogger:
         self.run.finish()
 
 
-def _short_hparam_str(hparams: dict, max_len: int =60) -> str:
+def _short_hparam_str(hparams: dict, max_len: int =200) -> str:
     """
     Turn a small hyperparam dict into a compact, filesystem-safe string.
     Example: {'lr':1e-3,'wd':0.1} -> 'lr1e-3_wd0.1' (possibly truncated + hash).
@@ -227,17 +225,92 @@ def _iter_hparam_configs(hyperparam_grid: dict):
     for combo in itertools.product(*values):
         yield dict(zip(keys, combo))
 
-#TODO Psuedocode below!
-def find_checkpoint(curr_dir: str, ) -> str: #Looks within the current directory and finds any checkpoint, if any
-    highest_iteration = 0
-    path = ""
-    for file in os.makedirs(curr_dir):
-        if .pt is in end of file:
-            if numbers in file > highest_iteration:
-                path = file
-                highest_iteration = numbers
 
-    return path
+
+def find_checkpoint(ckpt_dir: str) -> str | None:
+    """
+    Look in `ckpt_dir` for checkpoint files named like:
+      step_<STEP>_TIMESTAMP.pt
+    and return the path to the one with the largest STEP.
+    Returns None if no checkpoints found.
+    """
+    if not os.path.isdir(ckpt_dir):
+        return None
+
+    best_step = -1
+    best_path = None
+
+    for fname in os.listdir(ckpt_dir):
+        if not fname.endswith(".pt"):
+            continue
+
+        #filenames formatted "step_1234_20251118-120000.pt"
+        m = re.search(r"step_(\d+)_", fname)
+        if not m:
+            continue
+        step = int(m.group(1))
+
+        if step > best_step:
+            best_step = step
+            best_path = os.path.join(ckpt_dir, fname)
+
+    return best_path
+
+def _wandb_run_is_complete(
+    project_name: str,
+    run_id: str,
+    num_steps: int,
+    *,
+    entity: str | None = None,
+):
+    """
+    Returns (is_complete, summary_dict).
+
+    is_complete:
+      True  -> run exists, is finished, and max logged step >= num_steps-1
+      False -> run not found, not finished, or step < num_steps-1
+
+    summary_dict:
+      run.summary as a dict (or None if run missing / incomplete).
+    """
+    api = wandb.Api()
+    # Entity: prefer env var if not passed
+    if entity is None:
+        entity = os.environ.get("WANDB_ENTITY")
+
+    # Path format: "entity/project/run_id" OR "project/run_id" if no entity set
+    if entity:
+        path = f"{entity}/{project_name}/{run_id}"
+    else:
+        path = f"{project_name}/{run_id}"
+
+    try:
+        run = api.run(path)
+    except Exception:
+        # No such run or network issue → treat as incomplete
+        return False, None
+
+    # If you only want fully finished runs:
+    if run.state != "finished":
+        return False, None
+
+    # Scan history for max `step`
+    max_step = -1
+    # keys=["step"] keeps it light; index=False avoids DF index column in older wandb versions
+    for row in run.history(keys=["step"], pandas=False):
+        step_val = row.get("step")
+        if isinstance(step_val, (int, float)):
+            if step_val > max_step:
+                max_step = int(step_val)
+
+    # In your code, steps go from 0..num_steps-1.
+    # So if max_step >= num_steps-1, consider run "complete".
+    if max_step >= num_steps - 1:
+        # Grab summary values if you logged them earlier
+        summary = dict(run.summary) if run.summary is not None else {}
+        return True, summary
+
+    return False, None
 
 def _run_single_config(
     experiment_phase: str,
@@ -255,7 +328,9 @@ def _run_single_config(
     project_name: str,
     base_ckpt_dir: str,
     last_k: int,
-    continue_checkpoint: bool=True,
+    checkpoint_every: int,
+    continue_checkpoint: bool=False,
+    skip_complete: bool=False,
 ):
     """
     Run a single (arch, hyperparam config) training job.
@@ -263,6 +338,7 @@ def _run_single_config(
     """
     hparam_str = _short_hparam_str(hparams)
     # base_ckpt_dir/phase/optimizer/arch/hparam_str/
+    run_id = hparam_str[:128] 
 
     current_time = time.time()
     time_hash = hash(current_time)
@@ -276,24 +352,33 @@ def _run_single_config(
         
     )
     os.makedirs(ckpt_dir, exist_ok=True)
+    
+    if skip_complete:
+        is_complete, wb_summary = _wandb_run_is_complete(
+            project_name=project_name,
+            run_id=run_id,
+            num_steps=num_steps,
+        )
+        
+        if is_complete:
+            avg_last_k_loss = wb_summary.get("avg_last_k_train_loss", float("nan"))
+            final_eval_loss = wb_summary.get("final_eval_loss", float("nan"))
 
-    run_name = f"{hparam_str}"
-    group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
-    run = wandb.init(
-        project=project_name,
-        name=run_name[:128],  # wandb name limit
-        group=group_name,
-        config={
-            "experiment_phase": experiment_phase,
-            "optimizer": optimizer_name,
-            "arch": arch_name,
-            "num_steps": num_steps,
-            "device": device,
-            **hparams,
-        },
-        reinit=True,
-    )
-    logger = WandbLossLogger(run, last_k=last_k)
+            print(f"[SKIP] {arch_name} / {optimizer_name} / {hparam_str} already complete "
+                f"(max step >= {num_steps-1}). Skipping train().")
+
+            return {
+                "experiment_phase": experiment_phase,
+                "optimizer": optimizer_name,
+                "arch": arch_name,
+                "hparams": hparams,
+                "ckpt_dir": ckpt_dir,
+                "run_name": run_id,
+                "group_name": f"{experiment_phase}/{optimizer_name}/{arch_name}",
+                "final_eval_loss": final_eval_loss,
+                "avg_last_k_train_loss": avg_last_k_loss,
+            }
+    
 
     model = make_model(arch_name)
     opt_kwargs = {}
@@ -308,9 +393,33 @@ def _run_single_config(
             opt_kwargs[k] = hparams[k]
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
-    resume_from = "" #Should pass a string
+    resume_from = None
+    wandb_resume = "never"
     if continue_checkpoint:
         resume_from = find_checkpoint(ckpt_dir)
+        wandb_resume = "allow"
+
+    run_name = f"{hparam_str}"
+    group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
+
+    run = wandb.init(
+        id=run_id,
+        project=project_name,
+        name=run_id,  # wandb name limit
+        group=group_name,
+        config={
+            "experiment_phase": experiment_phase,
+            "optimizer": optimizer_name,
+            "arch": arch_name,
+            "num_steps": num_steps,
+            "device": device,
+            **hparams,
+        },
+        reinit=True,
+        resume=wandb_resume
+    )
+
+    logger = WandbLossLogger(run, last_k=last_k)
     
     model = train(
         model=model,
@@ -322,9 +431,9 @@ def _run_single_config(
         xy_size=xy_size,
         num_steps=num_steps,
         device=device,
-        checkpoint_every=hparams.get("checkpoint_every", 50),
+        checkpoint_every=checkpoint_every,
         checkpoint_dir=ckpt_dir,
-        resume_from=None, #TODO please check where this will be passed from 
+        resume_from=resume_from,
         verbose=True,
     )
     if len(logger.last_k) > 0:
@@ -352,6 +461,7 @@ def hyperparameter_sweep(
     optimizer_name: str,
     optimizer_class,
     hyperparam_grid: dict[str, list],
+    checkpoint_every: int,
     xy_size: int = 5,
     num_pairs: int = 5,
     *,
@@ -361,7 +471,8 @@ def hyperparameter_sweep(
     project_name: str = "bluey-merdifold",
     base_ckpt_dir: str = "checkpoints",
     last_k: int = 50,
-    continue_checkpoint: bool = False
+    continue_checkpoint: bool=False,
+    skip_complete: bool=False,
 ):
     """
     Run a grid search over hyperparameters *and* architectures
@@ -382,6 +493,7 @@ def hyperparameter_sweep(
                     optimizer_name,
                     optimizer_class,
                     hparams,
+                    checkpoint_every=checkpoint_every,
                     get_batch=get_batch,
                     num_pairs=num_pairs,
                     xy_size=xy_size,
@@ -391,6 +503,7 @@ def hyperparameter_sweep(
                     base_ckpt_dir=base_ckpt_dir,
                     last_k=last_k,
                     continue_checkpoint=continue_checkpoint,
+                    skip_complete=skip_complete,
                 )
                 results.append(summary)
 
