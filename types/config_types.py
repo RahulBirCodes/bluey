@@ -7,20 +7,27 @@ class OptimizerKwargs(TypedDict, total=False):
     beta2: float
     momentum: float
     nesterov: bool
-  
 
-class ExperimentConfig(TypedDict):
-    experiment_phase: str
+
+class ExperimentSpec(TypedDict):
     run_name: str
     arch_name: str
     optimizer_name: str
     optimizer_kwargs: OptimizerKwargs
     xy_size: int
     num_pairs: int
-    num_steps: int
     batch_size: int
-    checkpoint_every: int
-    device: str
     project_name: str
-    base_ckpt_dir: str
     last_k: int
+    checkpoint_every: int
+  
+
+class RunOptions(TypedDict):
+    experiment_phase: str
+    num_steps: int
+    device: str
+    base_ckpt_dir: str
+    job_id: str
+
+
+ExperimentConfig = ExperimentSpec & RunOptions
