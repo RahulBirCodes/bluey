@@ -15,20 +15,15 @@ def main():
         help="Path to JSON config file.",
     )
     args = parser.parse_args()
-
     print(f"\n=== Loading config from {args.config} ===")
     config = load_config(args.config)
-
     print("\n=== Starting training run ===")
     result = run_from_config(config)
 
-    # --------------------------------------------
-    # Print the final results
-    # --------------------------------------------
+    # print final results
     print("\n" + "="*60)
     print("TRAINING RUN COMPLETE")
     print("="*60)
-
     print(f"Run name:                 {config['run_name']}")
     print(f"Experiment phase:         {config['experiment_phase']}")
     print(f"Optimizer:                {config['optimizer_name']}")

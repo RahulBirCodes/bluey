@@ -295,8 +295,5 @@ def run_from_config(config: ExperimentConfig):
     logger.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
 
-    return {
-        "config": config,
-        "avg_last_k_train_loss": avg_last_k_loss,
-    }
+    return {"avg_last_k_train_loss": avg_last_k_loss}
 
