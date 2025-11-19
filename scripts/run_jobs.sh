@@ -23,5 +23,5 @@ NUM_STEPS=$8    # e.g. 3000
 for i in $(seq "$START" "$END"); do
   JOB_ID=$(printf "%03d" "$i")
   echo "=== Running job ${JOB_ID} (${OPTIMIZER}, ${ARCH}) ==="
-  ./run_job.sh "$OPTIMIZER" "$ARCH" "$JOB_ID" "$PHASE" "$DEVICE" "$CKPT_ROOT" "$NUM_STEPS"
+  ./run_job.sh "$OPTIMIZER" "$ARCH" "$JOB_ID" "$PHASE" "$DEVICE" "$CKPT_ROOT" "$NUM_STEPS" $
 done

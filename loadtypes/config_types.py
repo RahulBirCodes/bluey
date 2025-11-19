@@ -19,15 +19,14 @@ class ExperimentSpec(TypedDict):
     batch_size: int
     project_name: str
     last_k: int
-    checkpoint_every: int
-  
+    
 
 class RunOptions(TypedDict):
+    job_id: str
     experiment_phase: str
-    num_steps: int
     device: str
     base_ckpt_dir: str
-    job_id: str
-
+    num_steps: int
+    checkpoint_every: int
 
 ExperimentConfig = ExperimentSpec | RunOptions

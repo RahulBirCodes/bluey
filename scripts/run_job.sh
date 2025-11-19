@@ -14,6 +14,7 @@ PHASE=$4
 DEVICE=$5
 CKPT_ROOT=$6
 NUM_STEPS=$7
+CHECKPOINT_EVERY=$8
 
 CONFIG="jobs/${OPTIMIZER}/${ARCH}/job_${JOB_ID}.json"
 
@@ -24,4 +25,5 @@ python3 ../main.py \
     --num-steps "$NUM_STEPS" \
     --device "$DEVICE" \
     --ckpt-root "$CKPT_ROOT" \
+    --checkpoint_every "$CHECKPOINT_EVERY" \
     --job-id "$JOB_ID"
