@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from training import train_model, hyperparameter_sweep
+from scripts.training import train, hyperparameter_sweep
 
 
 class DummyModel(nn.Module):
@@ -64,7 +64,7 @@ def test_train_model():
     )
     
     try:
-        history = train_model(
+        history = train(
             model=model,
             optimizer=optimizer,
             train_loader=train_loader,

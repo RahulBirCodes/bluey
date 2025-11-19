@@ -20,3 +20,6 @@ def test_get_batch():
     for b in range(B):
         print(f"\nBatch element {b}:")
         print(tokens[b])
+
+if __name__ == "__main__":
+    test_get_batch()

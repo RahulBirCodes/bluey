@@ -6,12 +6,12 @@ import itertools
 import hashlib
 from collections import deque
 import time
-import torch_xla
 import wandb
 import datetime
 
 # Optional TPU support
 try:
+    import torch_xla
     import torch_xla.core.xla_model as xm
     HAS_XLA = True
 except ImportError:
@@ -158,7 +158,7 @@ def train(
                 "model_state": model.state_dict(),
                 "optimizer_state": optimizer.state_dict(),
                 "loss": loss.item(),
-                "scheduler": scheduler.state_dict()
+                "scheduler": scheduler.state_dict() if scheduler else None,
             }
             save_fn(state, ckpt_path)
             if verbose:
@@ -171,8 +171,8 @@ def train(
             iter_sec = time.time() - iter_start
             logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
 
-    if logger is not None:
-        logger.finish()
+    # if logger is not None:
+    #     logger.finish()
 
     return model
 
@@ -245,11 +245,11 @@ def _run_single_config(
     make_model,
     optimizer_name: str,
     optimizer_class,
-    xy_size: int,
-    num_pairs: int,
     hparams: dict,
-    *,
     get_batch,
+    num_pairs: int,
+    xy_size: int,
+    *,
     num_steps: int,
     device: str,
     project_name: str,
@@ -331,7 +331,7 @@ def _run_single_config(
         avg_last_k_loss = sum(logger.last_k) / len(logger.last_k)
     else:
         avg_last_k_loss = float("nan")
-    wandb.log({"avg_last_k_train_loss": avg_last_k_loss})
+    run.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
 
     return {
@@ -352,8 +352,8 @@ def hyperparameter_sweep(
     optimizer_name: str,
     optimizer_class,
     hyperparam_grid: dict[str, list],
-    xy_size: int,
-    num_pairs: int,
+    xy_size: int = 5,
+    num_pairs: int = 5,
     *,
     get_batch,
     num_steps: int,
