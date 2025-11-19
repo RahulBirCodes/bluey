@@ -8,9 +8,9 @@ import time
 import wandb
 from optimizers.muonW1 import MuonW
 from optimizers.manifold_muonW import ManifoldMuonW
-from ..types.config_types import OptimizerKwargs, ExperimentConfig
-from ..model.model import make_model
-from dataset import get_batch as get_ols_batch
+from loadtypes.config_types import OptimizerKwargs, ExperimentConfig
+from model.model import make_model
+from scripts.dataset import get_batch as get_ols_batch
 
 # Optional TPU support
 try:
@@ -275,7 +275,25 @@ def run_from_config(config: ExperimentConfig):
     logger = WandbLossLogger(run, last_k=last_k)
     model = make_model(arch_name)
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
-    optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
+
+    opt_kwargs = {}
+    
+    if "lr" in optimizer_kwargs:
+        opt_kwargs["lr"] = optimizer_kwargs["lr"]
+    if "weight_decay" in optimizer_kwargs:
+        opt_kwargs["weight_decay"] = optimizer_kwargs["weight_decay"]
+
+    # Handle beta1 / beta2 -> betas, if they exist
+    if "beta1" in optimizer_kwargs and "beta2" in optimizer_kwargs:
+        opt_kwargs["betas"] = (optimizer_kwargs["beta1"], optimizer_kwargs["beta2"])
+
+    # Muon / Manifold Muon might have other fields, e.g. "momentum"
+    # Pass any remaining optimizer-specific keys explicitly if you need:
+    for k in ["momentum", "nesterov"]:
+        if k in optimizer_kwargs:
+            opt_kwargs[k] = optimizer_kwargs[k]
+
+    optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
     logger = WandbLossLogger(run, last_k=last_k)
     

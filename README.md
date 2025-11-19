@@ -32,4 +32,18 @@ python3 scripts/sweep.py \
 run_job.sh OPTIMIZER ARCH JOB_ID PHASE DEVICE CKPT_ROOT NUM_STEPS
 ```
 
+## Run multiple jobs
+```
+!python main.py \
+    --optimizer AdamW \
+    --arch rms \
+    --start-id 0 \
+    --end-id 15 \
+    --phase sweep \
+    --device cpu \
+    --ckpt-root "$CKPT_ROOT" \
+    --num-steps 100
+
+```
+
 Wandb auths the first time you do init call if not alr auth'd.

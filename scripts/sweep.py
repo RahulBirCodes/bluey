@@ -5,38 +5,32 @@ import json
 import os
 
 
+
 HYPERPARAM_GRID_ADAMW = {
     "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
     "beta1": [0.85, 0.9, 0.95],
     "beta2": [0.95, 0.98, 0.999],
     "weight_decay": [0.0, 0.01, 0.1, 0.2],
-    "batch_size": [16, 32, 64, 128, 256, 512, 1024],
+    "batch_size": [32, 64, 128, 256, 512, 1024],
 }
 
 HYPERPARAM_GRID_MUON = {
-    "lr_matrix": [1e-3, 3e-3, 1e-2, 2e-2, 3e-2],
-    "lr_scalar": [1e-4, 3e-4, 1e-3, 3e-3],
+    "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
     "momentum": [0.9, 0.95, 0.98],  # often you’ll just fix 0.95
     "weight_decay": [0.0, 0.01, 0.1],
-    "batch_size": [64, 128, 256, 512, 1024],
+    "batch_size": [32, 64, 128, 256, 512, 1024],
 }
 
-HYPERPARAM_GRID_LION = {
-    "lr": [3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
-    "beta1": [0.85, 0.9, 0.95],
-    "beta2": [0.97, 0.99, 0.995],
-    "weight_decay": [0.0, 0.01, 0.1],
-    "batch_size": [64, 128, 256, 512, 1024],
-}
+OPTIMIZER_NAMES = ['AdamW', 'MuonW', "ManifoldMuonW"]
 
-OPTIMIZER_NAMES = ['AdamW', 'MuonW']
 
 OPTIMIZER_GRID_REGISTRY = {
-    'AdamW': HYPERPARAM_GRID_ADAMW,
-    'MuonW': HYPERPARAM_GRID_MUON
+    "AdamW": HYPERPARAM_GRID_ADAMW,
+    "MuonW": HYPERPARAM_GRID_MUON,
+    "ManifoldMuonW": HYPERPARAM_GRID_MUON,
 }
 
-MODEL_ARCHS = ['rms', 'standard']
+MODEL_ARCHS = ["rms", "standard", "none"]
 
 def short_hparam_str(hparams: dict, max_len: int = 40) -> str:
     """

@@ -1,39 +1,27 @@
 #!/bin/bash
 set -e
 
-if [ "$#" -lt 4 ]; then
-  echo "Usage: $0 OPTIMIZER ARCH START_ID END_ID"
-  echo "Example: $0 muon rms 0 15   # submits job_000..job_015 as separate SLURM jobs"
+# Usage:
+#   ./run_jobs_local.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS
+# Example:
+#   ./run_jobs_local.sh muon rms 0 15 sweep cuda checkpoints 3000
+
+if [ "$#" -ne 8 ]; then
+  echo "Usage: $0 OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS"
   exit 1
 fi
 
-OPTIMIZER=$1
-ARCH=$2
-START=$3
-END=$4
+OPTIMIZER=$1    # e.g. muon
+ARCH=$2         # e.g. rms
+START=$3        # e.g. 0
+END=$4          # e.g. 15
+PHASE=$5        # e.g. sweep
+DEVICE=$6       # cpu | cuda | tpu | auto
+CKPT_ROOT=$7    # e.g. checkpoints
+NUM_STEPS=$8    # e.g. 3000
 
 for i in $(seq "$START" "$END"); do
   JOB_ID=$(printf "%03d" "$i")
-  JOB_NAME="${OPTIMIZER}_${ARCH}_${JOB_ID}"
-
-  echo "Submitting SLURM job $JOB_NAME"
-
-  sbatch <<EOF
-#!/bin/bash
-#SBATCH --job-name=${JOB_NAME}
-#SBATCH --output=logs/${JOB_NAME}.out
-#SBATCH --error=logs/${JOB_NAME}.err
-#SBATCH --time=12:00:00
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-
-# Activate env here if needed:
-# source ~/.bashrc
-# conda activate bluey-env
-
-cd "$(pwd)"
-./run_job.sh "${OPTIMIZER}" "${ARCH}" "${JOB_ID}"
-EOF
-
+  echo "=== Running job ${JOB_ID} (${OPTIMIZER}, ${ARCH}) ==="
+  ./run_job.sh "$OPTIMIZER" "$ARCH" "$JOB_ID" "$PHASE" "$DEVICE" "$CKPT_ROOT" "$NUM_STEPS"
 done
