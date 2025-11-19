@@ -186,8 +186,8 @@ class WandbLossLogger:
         self.last_k = deque(maxlen=last_k)
     
     def log(self, metrics: dict):
-        if "loss" in metrics:
-            self.last_k.append(metrics["loss"])
+        if "train/loss" in metrics:
+            self.last_k.append(metrics["train/loss"])
         self.run.log(metrics)
     
     def finish(self):
@@ -359,7 +359,7 @@ def _run_single_config(
             run_id=run_id,
             num_steps=num_steps,
         )
-        
+
         if is_complete:
             avg_last_k_loss = wb_summary.get("avg_last_k_train_loss", float("nan"))
             final_eval_loss = wb_summary.get("final_eval_loss", float("nan"))
