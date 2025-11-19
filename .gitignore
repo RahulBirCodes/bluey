@@ -1,5 +1,8 @@
 .venv/
 wandb/
 checkpoints/
+<<<<<<< HEAD
 jobs/
 sweep/
+=======
+>>>>>>> parent of 8e3366b (feat: updated README to illustrate generating job files and running jobs)

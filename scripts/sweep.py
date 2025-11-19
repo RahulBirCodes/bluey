@@ -68,36 +68,42 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate hyperparameter sweep configuration files."
     )
+
     parser.add_argument(
         "--xy_size",
         type=int,
         required=True,
         help="Input feature dimensionality (D).",
     )
+
     parser.add_argument(
         "--num_pairs",
         type=int,
         required=True,
         help="Number of (x, y) pairs per batch (T).",
     )
+
     parser.add_argument(
         "--project_name",
         type=str,
         required=True,
         help="WandB project name for all generated configs.",
     )
+
     parser.add_argument(
         "--last_k",
         type=int,
         required=True,
         help="Number of recent losses to average for run summary.",
     )
+
     parser.add_argument(
         "--checkpoint_every",
         type=int,
         required=True,
         help="How many steps between checkpoints during training.",
     )
+
     parser.add_argument(
         "--output_dir",
         type=str,
