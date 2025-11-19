@@ -1,0 +1,12 @@
+python3 main.py \
+  --optimizer AdamW \
+  --device auto \
+  --phase sweep \
+  --num-steps 300 \
+  --architectures rms,standard \
+  --project-name bluey-merdifold \
+  --base-ckpt-dir checkpoints \
+  --print-config \
+  --checkpoint_every 50 \
+  --continue_checkpoint \
+  --skip_complete

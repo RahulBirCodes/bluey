@@ -5,7 +5,6 @@ import os
 import glob
 from collections import deque
 import time
-import torch_xla
 import wandb
 from optimizers.muonW1 import MuonW
 from optimizers.manifold_muonW import ManifoldMuonW
@@ -15,6 +14,7 @@ from dataset import get_batch as get_ols_batch
 
 # Optional TPU support
 try:
+    import torch_xla
     import torch_xla.core.xla_model as xm
     HAS_XLA = True
 except ImportError:
@@ -32,6 +32,7 @@ def resolve_device_and_saver(device_str: str):
 
         def optimizer_step_fn(optimizer):
             xm.optimizer_step(optimizer)
+            xm.mark_step()
 
     else:
         device = torch.device(device_str)
@@ -43,7 +44,7 @@ def resolve_device_and_saver(device_str: str):
     return device, save_fn, optimizer_step_fn
 
 
-def save_checkpoint(model, optimizer, step, path, scheduler=None):
+def save_checkpoint(model, optimizer, step: int, path: str, scheduler=None, save_fn=torch.save):
     ckpt = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -53,11 +54,11 @@ def save_checkpoint(model, optimizer, step, path, scheduler=None):
         "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
     }
 
-    torch.save(ckpt, path)
+    save_fn(ckpt, path)
     print(f"[checkpoint] saved to {path}")
 
 
-def load_checkpoint(model, optimizer, path, device="cuda", scheduler=None):
+def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None) -> int:
     ckpt = torch.load(path, map_location=device)
     model.load_state_dict(ckpt["model"])
     optimizer.load_state_dict(ckpt["optimizer"])
@@ -144,8 +145,8 @@ def train(
     print_interval=20,
     checkpoint_every=20,
     checkpoint_dir=None,
-    resume_from=None,
-    scheduler=None
+    resume_from: str | None = None,
+    scheduler=None,
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
@@ -155,9 +156,9 @@ def train(
         os.makedirs(checkpoint_dir, exist_ok=True)
     
     prev_step = 0
-    if resume_from is not None:
-        prev_step = load_checkpoint(model, optimizer, resume_from, scheduler=scheduler, device=device)
-
+    if resume_from:
+        prev_step = load_checkpoint(model, optimizer, resume_from, device=device, scheduler=scheduler)
+       
     for step in range(prev_step, num_steps):
         iter_start = time.time()
         tokens, X, Y, W, x_token_indices = get_batch(
@@ -198,9 +199,6 @@ def train(
             iter_sec = time.time() - iter_start
             logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
 
-    if logger is not None:
-        logger.finish()
-
     return model
 
 
@@ -215,8 +213,8 @@ class WandbLossLogger:
         self.last_k = deque(maxlen=last_k)
     
     def log(self, metrics: dict):
-        if "loss" in metrics:
-            self.last_k.append(metrics["loss"])
+        if "train/loss" in metrics:
+            self.last_k.append(metrics["train/loss"])
         self.run.log(metrics)
     
     def get_last_k_loss(self):
@@ -264,18 +262,23 @@ def run_from_config(config: ExperimentConfig):
     resume_from = find_latest_checkpoint(ckpt_dir)
 
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
+
     run = wandb.init(
+        id=run_id,
         project=project_name,
-        name=run_name[:128],  # wandb name limit
+        name=run_id,  # wandb name limit
         group=group_name,
         config=config,
         reinit=True,
+        resume=wandb_resume
     )
     logger = WandbLossLogger(run, last_k=last_k)
     model = make_model(arch_name)
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
     optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
 
+    logger = WandbLossLogger(run, last_k=last_k)
+    
     model = train(
         model=model,
         optimizer=optimizer,
@@ -288,6 +291,7 @@ def run_from_config(config: ExperimentConfig):
         device=device,
         checkpoint_every=checkpoint_every,
         checkpoint_dir=ckpt_dir,
+        resume_from=resume_from,
         verbose=True,
         resume_from=resume_from
     )
