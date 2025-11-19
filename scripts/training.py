@@ -141,8 +141,8 @@ def train(
     xy_size=5,
     num_steps=1000,
     device="cuda",
-    verbose=True,
-    print_interval=20,
+    verbose=False,
+    print_interval=1000,
     checkpoint_every=20,
     checkpoint_dir=None,
     resume_from: str | None = None,
@@ -264,14 +264,14 @@ def run_from_config(config: ExperimentConfig):
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
 
     run = wandb.init(
-        id=run_id,
+        id=run_name,
         project=project_name,
-        name=run_id,  # wandb name limit
+        name=run_name,  # wandb name limit
         group=group_name,
         config=config,
         reinit=True,
-        resume=wandb_resume
     )
+
     logger = WandbLossLogger(run, last_k=last_k)
     model = make_model(arch_name)
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
@@ -293,7 +293,6 @@ def run_from_config(config: ExperimentConfig):
         checkpoint_dir=ckpt_dir,
         resume_from=resume_from,
         verbose=True,
-        resume_from=resume_from
     )
     avg_last_k_loss = logger.get_last_k_loss()
     logger.log({"avg_last_k_train_loss": avg_last_k_loss})
