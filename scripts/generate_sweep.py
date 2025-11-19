@@ -74,7 +74,7 @@ def main():
             cd "{repo_root}"
 
             # Run the sweep job
-            python main.py \\
+            python .py \\
               --model="{cfg['model']}" \\
               --optimizer="{cfg['optimizer']}" \\
               --lr={cfg['lr']} \\
