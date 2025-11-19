@@ -2,3 +2,4 @@
 wandb/
 checkpoints/
 jobs/
+sweep/
