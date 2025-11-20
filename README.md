@@ -1,3 +1,15 @@
+## Environment set-up
+Clone the repo and cd into it
+```
+git clone https://github.com/RahulBirCodes/bluey.git
+cd bluey
+```
+
+## Environment set-up
+```
+pip install .
+```
+
 ## Hyperparameter sweep job generation (deterministic)
 ```
 python3 scripts/sweep.py \
@@ -16,13 +28,15 @@ run_job.sh OPTIMIZER ARCH JOB_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVE
 ```
 
 ## Run multiple jobs
+Run the script below if running on one device
 ```
 chmod +x run_job.sh run_jobs.sh
 
-run_jobs.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY
+run_jobs.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY [NUM_GPU]
 
 scripts/run_jobs.sh AdamW rms 1 899 sweep cpu checkpoints 50000 500
 
 ```
+Run the script below if running on multiple devices, i.e. multiple GPU's
 
 Wandb auths the first time you do init call if not alr auth'd.
