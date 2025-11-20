@@ -5,14 +5,30 @@ import json
 import os
 
 
+HYPERPARAM_GRID_ADAMW = {
+    "lr": [3e-4, 1e-3],
+    "beta1": [0.9],
+    "beta2": [0.98],
+    "weight_decay": [0.0, 0.1],
+    "batch_size": [64, 256],
+}
 
+HYPERPARAM_GRID_MUON = {
+    "lr": [1e-3, 3e-3],
+    "momentum": [0.95],
+    "weight_decay": [0.0, 0.05],
+    "batch_size": [64, 256],
+}
+
+""" 
 HYPERPARAM_GRID_ADAMW = {
     "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
     "beta1": [0.85, 0.9, 0.95],
     "beta2": [0.95, 0.98, 0.999],
     "weight_decay": [0.0, 0.01, 0.1, 0.2],
     "batch_size": [32, 64, 128, 256, 512, 1024],
-}
+    
+} 
 
 HYPERPARAM_GRID_MUON = {
     "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
@@ -20,6 +36,9 @@ HYPERPARAM_GRID_MUON = {
     "weight_decay": [0.0, 0.01, 0.1],
     "batch_size": [32, 64, 128, 256, 512, 1024],
 }
+
+
+"""
 
 OPTIMIZER_NAMES = ['AdamW', 'MuonW', "ManifoldMuonW"]
 
@@ -31,7 +50,7 @@ OPTIMIZER_GRID_REGISTRY = {
 
 MODEL_ARCHS = ["rms", "standard", "none"]
 
-def short_hparam_str(hparams: dict, max_len: int = 40) -> str:
+def short_hparam_str(hparams: dict, max_len: int = 128) -> str:
     """
     Turn a small hyperparam dict into a compact, filesystem-safe string.
     Example: {'lr':1e-3,'wd':0.1} -> 'lr1e-3_wd0.1' (possibly truncated + hash).
@@ -143,7 +162,7 @@ def main():
                 out_path = os.path.join(arch_dir, f"job_{job_id}.json")
                 with open(out_path, "w") as f:
                     json.dump(spec, f, indent=2)
-                print(f"  wrote {out_path}")
+                #print(f"  wrote {out_path}")
     print("\n=== Sweep generation complete ===")
 
 

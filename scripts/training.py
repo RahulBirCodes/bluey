@@ -11,6 +11,7 @@ from optimizers.manifold_muonW import ManifoldMuonW
 from loadtypes.config_types import OptimizerKwargs, ExperimentConfig
 from model.model import make_model
 from scripts.dataset import get_batch as get_ols_batch
+import datetime
 
 # Optional TPU support
 try:
@@ -53,50 +54,63 @@ def save_checkpoint(model, optimizer, step: int, path: str, scheduler=None, save
         "rng_state": torch.random.get_rng_state(),
         "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
     }
-
     save_fn(ckpt, path)
     print(f"[checkpoint] saved to {path}")
 
-
 def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None) -> int:
     ckpt = torch.load(path, map_location=device)
-    model.load_state_dict(ckpt["model"])
-    optimizer.load_state_dict(ckpt["optimizer"])
-    if scheduler and ckpt["scheduler"]:
-        scheduler.load_state_dict(ckpt["scheduler"])
-    torch.random.set_rng_state(ckpt["rng_state"])
-    if ckpt["cuda_rng_state"] is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state(ckpt["cuda_rng_state"])
-    print(f"[checkpoint] resumed from {path}")
-    return ckpt["step"]
+    print("Loaded checkpoint keys:", ckpt.keys())
 
+    # Handle old vs new key names
+    model_key = "model" if "model" in ckpt else "model_state"
+    optim_key = "optimizer" if "optimizer" in ckpt else "optimizer_state"
+
+    model.load_state_dict(ckpt[model_key])
+    optimizer.load_state_dict(ckpt[optim_key])
+
+    if scheduler is not None and "scheduler" in ckpt and ckpt["scheduler"] is not None:
+        scheduler.load_state_dict(ckpt["scheduler"])
+
+    # RNG state is optional – only restore if present
+    """ if "rng_state" in ckpt:
+        torch.random.set_rng_state(ckpt["rng_state"])
+    if "cuda_rng_state" in ckpt and ckpt["cuda_rng_state"] is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state(ckpt["cuda_rng_state"]) """
+
+    print(f"[checkpoint] resumed from {path}")
+    return ckpt.get("step", 0)
 
 def find_latest_checkpoint(checkpoint_dir: str) -> str | None:
     if not os.path.isdir(checkpoint_dir):
         return None
-    files = glob.glob(os.path.join(checkpoint_dir, "*.pt"))
+
+    files = glob.glob(os.path.join(checkpoint_dir, "step_*.pt"))
     if not files:
         return None
-    parsed = []
+
+    best_path = None
+    best_step = -1
+
     for path in files:
-        base = os.path.basename(path)  
-        # expected pattern: step_<step>_time_<time>.pt
-        parts = base.split("_")   # ['step', '50', 'time', '1731954200.1234.pt']
-        if len(parts) < 4:
+        base = os.path.basename(path)  # e.g. "step_2000_20251119-154210.pt"
+        if not base.startswith("step_"):
             continue
-        if parts[0] != "step" or parts[2] != "time":
+        parts = base.split("_")
+        # ["step", "<step>", "<timestamp>.pt"]
+        if len(parts) < 3:
             continue
+
+        step_str = parts[1]
         try:
-            step = int(parts[1])
-            timestamp_str = parts[3].split(".pt")[0]
-            timestamp = float(timestamp_str)
+            step = int(step_str)
         except ValueError:
             continue
-        parsed.append((path, step, timestamp))
-    if not parsed:
-        return None
-    parsed.sort(key=lambda x: (x[2], x[1]), reverse=True)
-    return parsed[0][0]
+
+        if step > best_step:
+            best_step = step
+            best_path = path
+
+    return best_path
 
 
 class WarmupConstantDecayLrScheduler:
@@ -180,15 +194,31 @@ def train(
             scheduler.step()
 
         if checkpoint_dir is not None and step % checkpoint_every == 0 and step != 0:
-            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}_time_{iter_start}.pt")
-            state = {
-                "step": step + 1,
-                "model_state": model.state_dict(),
-                "optimizer_state": optimizer.state_dict(),
-                "loss": loss.item(),
-                "scheduler": scheduler.state_dict()
-            }
-            save_fn(state, ckpt_path)
+            now = datetime.datetime.now()
+            timestamp = now.strftime("%Y%m%d-%H%M%S")
+            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}_{timestamp}.pt")
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                step=step + 1,
+                path=ckpt_path,
+                scheduler=scheduler,
+                save_fn=save_fn,   # torch.save or xm.save
+            )
+
+            #add wandb artifact logging
+            if logger is not None and hasattr(logger, "run"):
+                artifact = wandb.Artifact(
+                    name=f"ckpt_step_{step+1}",
+                    type="model",
+                    metadata={
+                        "step": step + 1,
+                        "arch": getattr(model, "__class__", type(model)).__name__,
+                    },
+                )
+                artifact.add_file(ckpt_path)
+                logger.run.log_artifact(artifact)
+            
             if verbose:
                 print(f"[Step {step}] Saved checkpoint to {ckpt_path}")
 
@@ -209,6 +239,7 @@ class WandbLossLogger:
       - keep a rolling window of the last K 'loss' values
     """
     def __init__(self, run, last_k: int = 50):
+        self.start_time = time.time()
         self.run = run
         self.last_k = deque(maxlen=last_k)
     
@@ -270,6 +301,7 @@ def run_from_config(config: ExperimentConfig):
         group=group_name,
         config=config,
         reinit=True,
+        resume="allow",
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
@@ -312,7 +344,7 @@ def run_from_config(config: ExperimentConfig):
         verbose=True,
         scheduler=scheduler
     )
-    
+
     avg_last_k_loss = logger.get_last_k_loss()
     logger.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
