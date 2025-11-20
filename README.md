@@ -1,3 +1,16 @@
+## Install the repository
+```
+git clone https://github.com/RahulBirCodes/bluey.git
+cd bluey
+```
+## Environment set-up
+```
+uv lock
+```
+or if uv uninstalled
+```
+pip install .
+```
 ## Hyperparameter sweep job generation (deterministic)
 ```
 python3 scripts/sweep.py \
@@ -16,12 +29,13 @@ run_job.sh OPTIMIZER ARCH JOB_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVE
 ```
 
 ## Run multiple jobs
+You can vary the number of devices by adding an optional number of GPU flag
 ```
 chmod +x run_job.sh run_jobs.sh
 
-run_jobs.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY
+run_jobs.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY [NUM_GPU]
 
-scripts/run_jobs.sh AdamW rms 1 899 sweep cpu checkpoints 50000 500
+scripts/run_jobs.sh AdamW rms 1 899 sweep cpu checkpoints 50000 500 [2]
 
 ```
 
