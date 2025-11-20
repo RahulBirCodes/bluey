@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-if [ $# -ne 7 ]; then
-    echo "Usage: $0 OPTIMIZER ARCH JOB_ID PHASE DEVICE CKPT_ROOT NUM_STEPS"
-    echo "Example: $0 muon rms 003 sweep cuda checkpoints 3000"
+if [ $# -ne 8 ]; then
+    echo "Usage: $0 OPTIMIZER ARCH JOB_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY"
+    echo "Example: $0 muon rms 003 sweep cuda checkpoints 3000 200"
     exit 1
 fi
 
@@ -19,7 +19,7 @@ CHECKPOINT_EVERY=$8
 CONFIG="jobs/${OPTIMIZER}/${ARCH}/job_${JOB_ID}.json"
 
 echo "Running config: $CONFIG"
-python3 ../main.py \
+python3 main.py \
     --config "$CONFIG" \
     --phase "$PHASE" \
     --num-steps "$NUM_STEPS" \

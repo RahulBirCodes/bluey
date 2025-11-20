@@ -23,7 +23,6 @@ HYPERPARAM_GRID_MUON = {
 
 OPTIMIZER_NAMES = ['AdamW', 'MuonW', "ManifoldMuonW"]
 
-
 OPTIMIZER_GRID_REGISTRY = {
     "AdamW": HYPERPARAM_GRID_ADAMW,
     "MuonW": HYPERPARAM_GRID_MUON,
@@ -98,13 +97,6 @@ def main():
     )
 
     parser.add_argument(
-        "--checkpoint_every",
-        type=int,
-        required=True,
-        help="How many steps between checkpoints during training.",
-    )
-
-    parser.add_argument(
         "--output_dir",
         type=str,
         default="jobs",
@@ -116,7 +108,6 @@ def main():
     num_pairs = args.num_pairs
     project_name = args.project_name
     last_k = args.last_k
-    checkpoint_every = args.checkpoint_every
     root = args.output_dir
 
     os.makedirs(root, exist_ok=True)
@@ -146,7 +137,6 @@ def main():
                     "batch_size": batch_size,
                     "project_name": project_name,
                     "last_k": last_k,
-                    "checkpoint_every": checkpoint_every,
                 }
                 # job_000.json naming
                 job_id = f"{idx:03d}"

@@ -64,7 +64,10 @@ def main():
         "experiment_phase": args.phase,
         "device": args.device,
         "base_ckpt_dir": args.ckpt_root,
+        "num_steps": args.num_steps,
+        "checkpoint_every": args.checkpoint_every,
     }
+
     config: ExperimentConfig = {**spec, **run_options}
     print("\n=== Starting training run ===")
     result = run_from_config(config)
@@ -77,9 +80,9 @@ def main():
     print(f"Architecture:             {spec['arch_name']}")
     print(f"Avg last-k train loss:    {result['avg_last_k_train_loss']:.6f}")
     print(f"Checkpoint directory:     {run_options['base_ckpt_dir']}")
+    print(f"Checkpoint every:     {run_options['checkpoint_every']}")
     print("=" * 60)
     print()
-
 
 if __name__ == "__main__":
     main()

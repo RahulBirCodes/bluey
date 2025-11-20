@@ -295,8 +295,7 @@ def run_from_config(config: ExperimentConfig):
 
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
-    logger = WandbLossLogger(run, last_k=last_k)
-    
+    scheduler = WarmupConstantDecayLrScheduler(optimizer, num_steps)
     model = train(
         model=model,
         optimizer=optimizer,
@@ -311,7 +310,9 @@ def run_from_config(config: ExperimentConfig):
         checkpoint_dir=ckpt_dir,
         resume_from=resume_from,
         verbose=True,
+        scheduler=scheduler
     )
+    
     avg_last_k_loss = logger.get_last_k_loss()
     logger.log({"avg_last_k_train_loss": avg_last_k_loss})
     logger.finish()
