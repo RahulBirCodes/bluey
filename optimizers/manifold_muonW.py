@@ -148,7 +148,7 @@ class ManifoldMuonW(Optimizer):
             mm_tol = group["mm_tol"]
             mm_use_momentum = group.get("mm_use_momentum", False)
             ADMM = group.get("ADMM", False)
-            use_manifold = group.get("manifold", False)
+            use_manifold = group.get("manifold", True)
 
             for p in group["params"]:
                 if p.grad is None:
@@ -182,6 +182,7 @@ class ManifoldMuonW(Optimizer):
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
 
                 if use_manifold and p.ndim >= 2:
+                    print("using manifold!")
                     # ---- Manifold Muon branch: only use on matrix weights (e.g. Q/K/V) ----
                     # Use a Muon-style momentum as the "effective gradient"
                     if mm_use_momentum:

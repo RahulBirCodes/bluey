@@ -15,7 +15,8 @@ HYPERPARAM_GRID_ADAMW = {
 
 HYPERPARAM_GRID_MUON = {
     "lr": [1e-3, 3e-3],
-    "momentum": [0.95],
+    "beta1": [0.9],
+    "beta2": [0.98],
     "weight_decay": [0.0, 0.05],
     "batch_size": [64, 256],
 }
