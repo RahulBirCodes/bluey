@@ -66,6 +66,8 @@ def manifold_muon_ADMM_step(
     Omega = torch.zeros_like(X)
     # Solve the dual problem with ADMM to find the update direction A
     for step in range(steps):
+        #if step % 10 == 0:
+            #print(f"W: {W} and step: {step}")
         # Update for Lambda (orthonormal least-squares solve)
         P = W.mT @ (1 / rho * Omega + X - G)
         Lambda_upd = 0.25 * (P + P.mT)
@@ -106,7 +108,7 @@ class ManifoldMuonW(Optimizer):
         mm_steps: int = 50,
         mm_alpha: float = 0.01,
         mm_tol: float = 1e-6,
-        ADMM: bool = False,
+        ADMM: bool = True,
         mm_use_momentum: bool = False,
     ):
         if lr <= 0.0:
@@ -139,6 +141,7 @@ class ManifoldMuonW(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
+            #print(f"group: {group}, group['params'] {group['params']}")
             lr = group["lr"]
             beta1, beta2 = group["betas"]
             weight_decay = group["weight_decay"]
@@ -147,10 +150,11 @@ class ManifoldMuonW(Optimizer):
             mm_alpha = group["mm_alpha"]
             mm_tol = group["mm_tol"]
             mm_use_momentum = group.get("mm_use_momentum", False)
-            ADMM = group.get("ADMM", False)
+            ADMM = group.get("ADMM", True)
             use_manifold = group.get("manifold", True)
 
             for p in group["params"]:
+
                 if p.grad is None:
                     continue
                 grad = p.grad
@@ -182,9 +186,9 @@ class ManifoldMuonW(Optimizer):
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
 
                 if use_manifold and p.ndim >= 2:
-                    print("using manifold!")
-                    # ---- Manifold Muon branch: only use on matrix weights (e.g. Q/K/V) ----
-                    # Use a Muon-style momentum as the "effective gradient"
+                    #print("using manifold!")
+                    # I think that we should just use ManifoldMuon on all of the weights
+                    # Let's not use mommentum
                     if mm_use_momentum:
                         muon_m.lerp_(grad, 1.0 - beta1)   # simple EMA; could tweak
                         G_eff = muon_m
