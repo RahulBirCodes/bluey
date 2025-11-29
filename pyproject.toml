@@ -18,6 +18,6 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["model*", "scripts*", "optimizers*", "loadtypes*"]
+include = ["model*", "scripts*", "optimizers*", "types*"]
 exclude = ["wandb*", "checkpoints*", "jobs*", "logs*"]
 

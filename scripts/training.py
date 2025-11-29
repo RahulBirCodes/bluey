@@ -5,10 +5,9 @@ import os
 import glob
 from collections import deque
 import time
-import wandb
 from optimizers.muonW1 import MuonW
 from optimizers.manifold_muonW import ManifoldMuonW
-from loadtypes.config_types import OptimizerKwargs, ExperimentConfig
+from ..types.config_types import OptimizerKwargs, ExperimentConfig
 from model.model import make_model
 from scripts.dataset import get_batch as get_ols_batch
 import datetime
