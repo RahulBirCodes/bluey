@@ -2,6 +2,10 @@
 wandb/
 checkpoints/
 jobs/
+<<<<<<< HEAD
 sweep/
 bluey.egg-info/
 build/
+=======
+__pycache__/
+>>>>>>> 026e60ed8c3144feb8d05227eeaec17e1c2dd18a

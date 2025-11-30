@@ -69,10 +69,10 @@ class LayerNorm(nn.Module):
     mean = x.mean(dim=-1, keepdim=True)
     variance = x.var(dim=-1, keepdim=True, unbiased=False)
     x_norm = (x - mean) * torch.rsqrt(variance + self.eps)
-    return x_norm * self.scale #+ self.bias
+    return x_norm * self.scale + self.bias
 
 class MultiHeadAttention(nn.Module):
-  def __init__(self, d_model = 256, n_heads = 8):
+  def __init__(self, d_model=256, n_heads=8, lips=False):
     super().__init__()
     self.d_model = d_model
     self.n_heads = n_heads
@@ -80,12 +80,13 @@ class MultiHeadAttention(nn.Module):
     self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
     self.out = nn.Linear(d_model, d_model, bias=False)
     self.rope = RotaryEmbedding(self.d_k)
+    self.lips = lips
 
   def sdpa(self, Q, K, V):
     B, H, T, D = Q.shape
     Q, K = self.rope(Q, K)
     attn_scores = torch.matmul(Q, K.transpose(-2, -1))
-    attn_scores = attn_scores / self.d_k ** 0.5
+    attn_scores = attn_scores / (self.d_k if self.lips else self.d_k ** 0.5)
     mask = torch.tril(torch.ones(T, T, device=Q.device))
     attn_scores= attn_scores.masked_fill(mask == 0, -float("inf"))
     attn_probs = F.softmax(attn_scores, dim=-1)
@@ -115,7 +116,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None):
+  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None, lips=False):
     super().__init__()
     self.n_layers = n_layers
     self.hidden_size = hidden_size
@@ -123,7 +124,8 @@ class AttentionBlock(nn.Module):
     self.has_norm = norm_fn is not None
     if self.has_norm:
       self.norm = norm_fn(hidden_size)
-    self.mha = MultiHeadAttention(hidden_size, n_heads)
+    self.mha = MultiHeadAttention(hidden_size, n_heads, lips=lips)
+    self.lips = lips
   
   def forward(self, x):
     if self.has_norm:
@@ -131,7 +133,11 @@ class AttentionBlock(nn.Module):
     else:
       t = x
     t, _ = self.mha(t)
-    return t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
+    if self.lips:
+      out = t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
+    else:
+      out = t + x
+    return out
 
 
 class SwiGLU(nn.Module):
@@ -150,7 +156,7 @@ class SwiGLU(nn.Module):
 
 
 class MLP(nn.Module):
-  def __init__(self, n_layers=15, hidden_size=256, norm_fn=None, ):
+  def __init__(self, n_layers=15, hidden_size=256, norm_fn=None, lips=False):
     super().__init__()
     self.n_layers = n_layers
     self.hidden_size = hidden_size
@@ -158,6 +164,7 @@ class MLP(nn.Module):
     if self.has_norm:
       self.norm = norm_fn(hidden_size)
     self.swiglu = SwiGLU(hidden_size)
+    self.lips = lips
 
   def forward(self, x):
     if self.has_norm:
@@ -165,17 +172,21 @@ class MLP(nn.Module):
     else:
       t = x
     t = self.swiglu(t)
-    return t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
+    if self.lips:
+      out = t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
+    else:
+      out = t + x
+    return out
 
 
 class TransformerBlock(nn.Module):
-  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None):
+  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None, lips=False):
     super().__init__()
     self.n_layers = n_layers
     self.hidden_size = hidden_size
     self.n_heads = n_heads
-    self.attn = AttentionBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn)
-    self.mlp = MLP(n_layers, hidden_size, norm_fn=norm_fn)
+    self.attn = AttentionBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips)
+    self.mlp = MLP(n_layers, hidden_size, norm_fn=norm_fn, lips=lips)
   
   def forward(self, x):
     x = self.attn(x)
@@ -189,13 +200,14 @@ class Transformer(nn.Module):
                 n_heads=8, 
                 n_layers=15, 
                 xy_size=5, 
+                lips=False,
                 norm_fn=lambda d: RMSNorm(d, learnable=False)):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
     self.n_layers = n_layers
     self.xy_size = xy_size
-    self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn) for _ in range(n_layers)])
+    self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips) for _ in range(n_layers)])
     self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
     # emb should NOT use standard Xavier initialization
     # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1
