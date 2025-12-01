@@ -227,6 +227,7 @@ class Transformer(nn.Module):
     x = self.unembedding(x)
     return x
 
+@torch.no_grad()
 def orthogonal_init(m):
     if getattr(m, "is_input_embedding", False):
         return
