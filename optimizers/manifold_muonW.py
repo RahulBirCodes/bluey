@@ -273,15 +273,15 @@ class ManifoldMuonW(Optimizer):
                     p.data.addcdiv_(exp_avg, denom, value=-step_size)
 
                 if type == "embedding":
-                    scale = new_W = p.data
+                    new_W = p.data
                     in_d, out_d = new_W
-
+                    
                     new_W = 1 / (math.sqrt(in_d) / 2)  * new_W
 
                     #RMS norm update
                     p.data.copy_(new_W)
                 if type == "unembedding":
-                    scale = new_W = p.data
+                    new_W = p.data
                     in_d, out_d = new_W
 
                     new_W = 1 / (math.sqrt(in_d))  * new_W

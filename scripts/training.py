@@ -282,11 +282,11 @@ def create_optimizer_groups(model, lr=0.001, weight_decay=0.0):
         # 1. Check if this is the Readout/Unembedding layer
         # Your Transformer class calls it "unembedding"
         if "unembedding" in name:
-            print(f"Assigning {name} to Unmbeddding (RMS Norm (1/2) Column) - Reason: Sparse input")
+            print(f"Assigning {name} to Unmbeddding (RMS Norm Column) - Reason: Sparse input")
             unembedding_params.append(param)
 
         elif "embedding" in name:
-            print(f"Assigning {name} to Embeddding (RMS Norm Column) - Reason: Readout Head")
+            print(f"Assigning {name} to Embeddding (RMS Norm (1/2) Column) - Reason: Readout Head")
             embedding_params.append(param)
 
         # 2. Check dimensions
@@ -315,13 +315,13 @@ def create_optimizer_groups(model, lr=0.001, weight_decay=0.0):
         },
         {
             "params": embedding_params,
-            "manifold": "embedding",         # Flag for your Optimizer
+            "type": "embedding",         # Flag for your Optimizer
             "lr": lr,               # Standard AdamW LR
             "weight_decay": weight_decay
         },
         {
             "params": unembedding_params,
-            "manifold": "unembedding",         # Flag for your Optimizer
+            "type": "unembedding",         # Flag for your Optimizer
             "lr": lr,               # Standard AdamW LR
             "weight_decay": weight_decay
         }
