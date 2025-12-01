@@ -139,7 +139,7 @@ def main():
 
         for lips in [True, False]:
             for arch_name in MODEL_ARCHS:
-                arch_dir = os.path.join(opt_dir, arch_name, 'lips' if lips else 'no_lips')
+                arch_dir = os.path.join(opt_dir, arch_name, 'lips' if lips else 'nolips')
                 os.makedirs(arch_dir, exist_ok=True)
                 print(f"\nOptimizer: {optimizer_name}, Arch: {arch_name}")
                 hparam_dicts = list(iter_hparam_configs(opt_grid))
@@ -147,7 +147,7 @@ def main():
                     batch_size = hparams["batch_size"]
                     optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
                     hparam_str = short_hparam_str(hparams)
-                    run_name = f"{optimizer_name}_{arch_name}_{hparam_str}_{'lips' if lips else 'no_lips'}"
+                    run_name = f"{optimizer_name}_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
                     spec = {
                         "run_name": run_name,
                         "arch_name": arch_name,
