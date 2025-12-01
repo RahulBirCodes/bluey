@@ -5,11 +5,12 @@ import os
 import glob
 from collections import deque
 import time
-from optimizers.muonW1 import MuonW
-from optimizers.manifold_muonW import ManifoldMuonW
-from ..types.config_types import OptimizerKwargs, ExperimentConfig
-from model.model import make_model
-from scripts.dataset import get_batch as get_ols_batch
+from ..optimizers.muonW1 import MuonW
+from ..optimizers.manifold_muonW import ManifoldMuonW
+from ..config_types.config_types import OptimizerKwargs, ExperimentConfig
+from ..model.model import make_model
+from ..model.model import orthogonal_init
+from ..scripts.dataset import get_batch as get_ols_batch
 import datetime
 
 # Optional TPU support
@@ -325,6 +326,9 @@ def run_from_config(config: ExperimentConfig):
             opt_kwargs[k] = optimizer_kwargs[k]
 
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
+
+    if resume_from is None:
+        model.apply(orthogonal_init)
 
     scheduler = WarmupConstantDecayLrScheduler(optimizer, num_steps)
     model = train(

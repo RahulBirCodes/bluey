@@ -1,6 +1,6 @@
 import torch
 from torch.optim import Optimizer
-from optimizers.msign import msign
+from ..optimizers.msign import msign
 import math
 import torch
 
