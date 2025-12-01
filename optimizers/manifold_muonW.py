@@ -1,6 +1,6 @@
 import torch
 from torch.optim import Optimizer
-from ..optimizers.msign import msign
+from optimizers.msign import msign
 import math
 import torch
 
@@ -198,7 +198,7 @@ class ManifoldMuonW(Optimizer):
             mm_tol = group["mm_tol"]
             mm_use_momentum = group.get("mm_use_momentum", False)
             ADMM = group.get("ADMM", True)
-            use_manifold = group.get("manifold", True)
+            type = group.get("type", "standard")
 
             for p in group["params"]:
 
@@ -221,7 +221,7 @@ class ManifoldMuonW(Optimizer):
                     # Muon-style momentum for manifold params
                     state["muon_m"] = torch.zeros_like(p)
                     
-                    if use_manifold and p.ndim >= 2:
+                    if type == "manifold" and p.ndim >= 2:
                         # Lambda initialization (Square matrix of size min(rows, cols))
                         dim = min(p.shape[0], p.shape[1])
                         state["lambda"] = torch.zeros((dim, dim), device=p.device, dtype=p.dtype)
@@ -237,7 +237,7 @@ class ManifoldMuonW(Optimizer):
                 exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
 
-                if use_manifold and p.ndim >= 2:
+                if type == "manifold" and p.ndim >= 2:
                     # --- MANIFOLD MUON BRANCH ---
                     
                     # 1. Momentum handling
@@ -261,7 +261,7 @@ class ManifoldMuonW(Optimizer):
                     # 3. Apply updates
                     p.data.copy_(new_W)
                     state["lambda"].copy_(new_Lambda)
-
+                
                 else:
                     # ---- AdamW branch ----
                     bias_correction1 = 1.0 - beta1 ** state["step"]
@@ -271,5 +271,22 @@ class ManifoldMuonW(Optimizer):
                     step_size = lr / bias_correction1
 
                     p.data.addcdiv_(exp_avg, denom, value=-step_size)
+
+                if type == "embedding":
+                    scale = new_W = p.data
+                    in_d, out_d = new_W
+
+                    new_W = 1 / (math.sqrt(in_d) / 2)  * new_W
+
+                    #RMS norm update
+                    p.data.copy_(new_W)
+                if type == "unembedding":
+                    scale = new_W = p.data
+                    in_d, out_d = new_W
+
+                    new_W = 1 / (math.sqrt(in_d))  * new_W
+
+                    #RMS norm update
+                    p.data.copy_(new_W)
 
         return loss
