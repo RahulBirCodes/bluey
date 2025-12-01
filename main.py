@@ -1,8 +1,8 @@
 import json
 import argparse
 from typing import cast
-from scripts.training import run_from_config
-from config_types.config_types import ExperimentSpec, RunOptions, ExperimentConfig
+from .scripts.training import run_from_config
+from .config_types.config_types import ExperimentSpec, RunOptions, ExperimentConfig
 
 def load_spec(path: str) -> ExperimentSpec:
     """Load only the experiment specification (static part) from JSON."""
