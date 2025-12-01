@@ -9,6 +9,7 @@ from ..optimizers.muonW1 import MuonW
 from ..optimizers.manifold_muonW import ManifoldMuonW
 from ..config_types.config_types import OptimizerKwargs, ExperimentConfig
 from ..model.model import make_model
+from ..model.model import orthogonal_init
 from ..scripts.dataset import get_batch as get_ols_batch
 import datetime
 
@@ -260,6 +261,71 @@ OPTIMIZER_REGISTRY = {
     "ManifoldMuonW": ManifoldMuonW,
 }
 
+def create_optimizer_groups(model, lr=0.001, weight_decay=0.0):
+    """
+    Splits model parameters into two groups:
+    1. Manifold Group: 2D+ weights (Linear layers) EXCLUDING the readout head.
+       - optimized via Muon (Stiefel updates).
+    2. Standard Group: 1D weights (Norms, Biases) AND the readout head.
+       - optimized via AdamW.
+    """
+    manifold_params = []
+    standard_params = []
+    embedding_params = []
+    unembedding_params = []
+
+    # Iterate over named parameters to filter by name AND shape
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        # 1. Check if this is the Readout/Unembedding layer
+        # Your Transformer class calls it "unembedding"
+        if "unembedding" in name:
+            print(f"Assigning {name} to Unmbeddding (RMS Norm Column) - Reason: Sparse input")
+            unembedding_params.append(param)
+
+        elif "embedding" in name:
+            print(f"Assigning {name} to Embeddding (RMS Norm (1/2) Column) - Reason: Readout Head")
+            embedding_params.append(param)
+
+        # 2. Check dimensions
+        # Biases, LayerNorm scales, and 1D tensors must be Standard
+        elif param.ndim < 2:
+            print(f"Assigning {name} to Standard (AdamW) - Reason: 1D parameter")
+            standard_params.append(param)
+
+        # 3. Everything else (2D matrices) is Manifold
+        else:
+            print(f"Assigning {name} to Manifold (Muon)")
+            manifold_params.append(param)
+
+    return [
+        {
+            "params": manifold_params,
+            "type": "manifold",          # Flag for your Optimizer
+            "lr": lr*20,                # Muon typically handles/needs higher LR
+            "weight_decay": weight_decay
+        },
+        {
+            "params": standard_params,
+            "type": "standard",         # Flag for your Optimizer
+            "lr": lr,               # Standard AdamW LR
+            "weight_decay": weight_decay
+        },
+        {
+            "params": embedding_params,
+            "type": "embedding",         # Flag for your Optimizer
+            "lr": lr,               # Standard AdamW LR
+            "weight_decay": weight_decay
+        },
+        {
+            "params": unembedding_params,
+            "type": "unembedding",         # Flag for your Optimizer
+            "lr": lr,               # Standard AdamW LR
+            "weight_decay": weight_decay
+        }
+    ]
 
 def run_from_config(config: ExperimentConfig):
     """
@@ -295,7 +361,7 @@ def run_from_config(config: ExperimentConfig):
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
 
     run = wandb.init(
-        id=run_name,
+        entity="bluey-merdifold",
         project=project_name,
         name=run_name,  # wandb name limit
         group=group_name,
@@ -326,6 +392,13 @@ def run_from_config(config: ExperimentConfig):
             opt_kwargs[k] = optimizer_kwargs[k]
 
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
+    
+    if optimizer_name == "ManifoldMuonW":
+        param_groups = create_optimizer_groups(model, lr=opt_kwargs["lr"], weight_decay=opt_kwargs["weight_decay"])
+        optimizer = optimizer_class(param_groups, **opt_kwargs)
+
+    if resume_from is None:
+        model.apply(orthogonal_init)
 
     scheduler = WarmupConstantDecayLrScheduler(optimizer, num_steps)
     model = train(
