@@ -57,4 +57,15 @@ def get_batch(
     tokens[b_ind, y_pos, 1] = 1.0
     tokens[b_ind, y_pos, 2+xy_size:2+2*xy_size] = Y
     # return x_pos since model outputs y_preds there
+
+    
     return tokens, X, Y, W, x_pos
+
+if __name__ == "__main__":
+    tokens, X, Y, W, x_pos = get_batch(64, 48, 5, "cpu")
+
+    X_norm = torch.norm(X)
+    Y_norm = torch.norm(Y)
+
+    print(f"X_norm: {X_norm} Y_norm: {Y_norm}")
+    print(f"first ten tokens of one batch: {tokens[0, :10, :]}")

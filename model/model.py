@@ -2,6 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def orthogonal_init(m):
+    if isinstance(m, nn.Linear):
+        nn.init.orthogonal_(m.weight)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+
 class RotaryEmbedding(nn.Module):
   def __init__(self, head_dim, base=10000):
     super().__init__()

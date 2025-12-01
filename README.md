@@ -35,7 +35,9 @@ chmod +x run_job.sh run_jobs.sh
 
 run_jobs.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY [NUM_GPU]
 
-scripts/run_jobs.sh AdamW rms 1 899 sweep cpu checkpoints 50000 500 [2]
+scripts/run_job.sh ManifoldMuonW none 1 sweep cpu checkpoints 200 200
+
+
 
 ```
 
