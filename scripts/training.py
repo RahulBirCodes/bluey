@@ -5,11 +5,11 @@ import os
 import glob
 from collections import deque
 import time
-from optimizers.muonW1 import MuonW
-from optimizers.manifold_muonW import ManifoldMuonW
-from ..types.config_types import OptimizerKwargs, ExperimentConfig
-from model.model import make_model
-from scripts.dataset import get_batch as get_ols_batch
+from ..optimizers.muonW1 import MuonW
+from ..optimizers.manifold_muonW import ManifoldMuonW
+from ..config_types.config_types import OptimizerKwargs, ExperimentConfig
+from ..model.model import make_model
+from ..scripts.dataset import get_batch as get_ols_batch
 import datetime
 
 # Optional TPU support

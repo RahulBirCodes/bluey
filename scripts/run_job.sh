@@ -16,10 +16,10 @@ CKPT_ROOT=$6
 NUM_STEPS=$7
 CHECKPOINT_EVERY=$8
 
-CONFIG="jobs/${OPTIMIZER}/${ARCH}/job_${JOB_ID}.json"
+CONFIG="bluey/jobs/${OPTIMIZER}/${ARCH}/job_${JOB_ID}.json"
 
 echo "Running config: $CONFIG"
-python3 main.py \
+python3 -m bluey.main \
     --config "$CONFIG" \
     --phase "$PHASE" \
     --num-steps "$NUM_STEPS" \

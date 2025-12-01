@@ -1,6 +1,6 @@
 import torch
 from torch.optim import Optimizer
-from optimizers.msign import msign
+from ..optimizers.msign import msign
 import math
 import torch
 
@@ -182,7 +182,7 @@ class ManifoldMuonW(Optimizer):
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
 
                 if use_manifold and p.ndim >= 2:
-                    print("using manifold!")
+                    # print("using manifold!")
                     # ---- Manifold Muon branch: only use on matrix weights (e.g. Q/K/V) ----
                     # Use a Muon-style momentum as the "effective gradient"
                     if mm_use_momentum:
