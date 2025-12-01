@@ -277,7 +277,6 @@ class ManifoldMuonW(Optimizer):
 
                     in_d, out_d = new_W.shape
 
-
                     current_L2 = torch.linalg.norm(new_W, dim=0, keepdim=True)
                     target_L2 = math.sqrt(in_d / 2)
 
@@ -285,19 +284,6 @@ class ManifoldMuonW(Optimizer):
 
                     new_W = new_W.mul_(scale)
 
-                    #RMS norm update
-                    p.data.copy_(new_W)
-                if type == "unembedding":
-                    new_W = p.data
-
-                    in_d, out_d = new_W.shape
-
-                    current_L2 = torch.linalg.norm(new_W, dim=0, keepdim=True)
-                    target_L2 = math.sqrt(in_d)
-
-                    scale = target_L2 / current_L2
-
-                    new_W = new_W.mul_(scale)
                     #RMS norm update
                     p.data.copy_(new_W)
 
