@@ -273,19 +273,18 @@ class ManifoldMuonW(Optimizer):
                     p.data.addcdiv_(exp_avg, denom, value=-step_size)
 
                 if type == "embedding":
-                    new_W = p.data
+                    W = p.data
 
-                    in_d, out_d = new_W.shape
+                    rms = W.pow(2).mean(dim=0, keepdim=True).sqrt()
+                    eps = 1e-8
+                    max_inflate = 16.0
+                    
+                    inv_rms = 1.0 / (rms + eps)
+                    inv_rms = torch.clamp(inv_rms, max=max_inflate)
+                    scale = inv_rms
 
-                    current_L2 = torch.linalg.norm(new_W, dim=0, keepdim=True)
-                    target_L2 = math.sqrt(in_d / 2)
-
-                    scale = target_L2 / current_L2
-
-                    new_W = new_W.mul_(scale)
-
-                    #RMS norm update
-                    p.data.copy_(new_W)
+                    W.mul_(scale)
+                    p.data.copy_(W)
 
 
         return loss
