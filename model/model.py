@@ -215,6 +215,7 @@ class Transformer(nn.Module):
     self.xy_size = xy_size
     self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips) for _ in range(n_layers)])
     self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
+    self.embedding.is_input_embedding = True
     # emb should NOT use standard Xavier initialization
     # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1
     nn.init.normal_(self.embedding.weight, mean=0.0, std=(xy_size + 1)**-0.5)
@@ -232,6 +233,22 @@ class Transformer(nn.Module):
     x = self.unembedding(x)
     return x
 
+@torch.no_grad()
+def orthogonal_init(m):
+    if getattr(m, "is_input_embedding", False):
+        return
+    if isinstance(m, nn.Linear):
+        w = m.weight
+        if w.shape[0] >= w.shape[1]:
+            nn.init.orthogonal_(w)
+        else:
+            # orthogonalize on the transposed shape then transpose back
+            tmp = torch.empty(w.shape[1], w.shape[0], device=w.device, dtype=w.dtype)
+            nn.init.orthogonal_(tmp)
+            m.weight.copy_(tmp.t())
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+
 def make_model(arch_name):
     if arch_name == "rms":
       ln = lambda d: RMSNorm(d, learnable=False)
@@ -239,5 +256,6 @@ def make_model(arch_name):
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None
-    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln)
+    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=True)
+    transformer.apply(orthogonal_init)
     return transformer
