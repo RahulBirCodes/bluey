@@ -360,7 +360,6 @@ def run_from_config(config: ExperimentConfig):
     group_name = f"{experiment_phase}/{optimizer_name}/{arch_name}"
 
     run = wandb.init(
-        id=run_name,
         project=project_name,
         name=run_name,  # wandb name limit
         group=group_name,

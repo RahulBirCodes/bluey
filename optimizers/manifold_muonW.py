@@ -274,15 +274,15 @@ class ManifoldMuonW(Optimizer):
 
                 if type == "embedding":
                     new_W = p.data
-                    in_d, out_d = new_W
-                    
+                    in_d, out_d = new_W.shape
+
                     new_W = 1 / (math.sqrt(in_d) / 2)  * new_W
 
                     #RMS norm update
                     p.data.copy_(new_W)
                 if type == "unembedding":
                     new_W = p.data
-                    in_d, out_d = new_W
+                    in_d, out_d = new_W.shape
 
                     new_W = 1 / (math.sqrt(in_d))  * new_W
 
