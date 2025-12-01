@@ -12,6 +12,7 @@ class OptimizerKwargs(TypedDict, total=False):
 class ExperimentSpec(TypedDict):
     run_name: str
     arch_name: str
+    lips: bool
     optimizer_name: str
     optimizer_kwargs: OptimizerKwargs
     xy_size: int
@@ -29,4 +30,6 @@ class RunOptions(TypedDict):
     num_steps: int
     checkpoint_every: int
 
-ExperimentConfig = ExperimentSpec | RunOptions
+
+class ExperimentConfig(ExperimentSpec, RunOptions):
+    pass

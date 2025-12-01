@@ -137,32 +137,34 @@ def main():
         opt_dir = os.path.join(root, optimizer_name)
         os.makedirs(opt_dir, exist_ok=True)
 
-        for arch_name in MODEL_ARCHS:
-            arch_dir = os.path.join(opt_dir, arch_name)
-            os.makedirs(arch_dir, exist_ok=True)
-            print(f"\nOptimizer: {optimizer_name}, Arch: {arch_name}")
-            hparam_dicts = list(iter_hparam_configs(opt_grid))
-            for idx, hparams in enumerate(hparam_dicts):
-                batch_size = hparams["batch_size"]
-                optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
-                hparam_str = short_hparam_str(hparams)
-                run_name = f"{optimizer_name}_{arch_name}_{hparam_str}"
-                spec = {
-                    "run_name": run_name,
-                    "arch_name": arch_name,
-                    "optimizer_name": optimizer_name,
-                    "optimizer_kwargs": optimizer_kwargs,
-                    "xy_size": xy_size,
-                    "num_pairs": num_pairs,
-                    "batch_size": batch_size,
-                    "project_name": project_name,
-                    "last_k": last_k,
-                }
-                # job_000.json naming
-                job_id = f"{idx:03d}"
-                out_path = os.path.join(arch_dir, f"job_{job_id}.json")
-                with open(out_path, "w") as f:
-                    json.dump(spec, f, indent=2)
+        for lips in [True, False]:
+            for arch_name in MODEL_ARCHS:
+                arch_dir = os.path.join(opt_dir, arch_name, 'lips' if lips else 'no_lips')
+                os.makedirs(arch_dir, exist_ok=True)
+                print(f"\nOptimizer: {optimizer_name}, Arch: {arch_name}")
+                hparam_dicts = list(iter_hparam_configs(opt_grid))
+                for idx, hparams in enumerate(hparam_dicts):
+                    batch_size = hparams["batch_size"]
+                    optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
+                    hparam_str = short_hparam_str(hparams)
+                    run_name = f"{optimizer_name}_{arch_name}_{hparam_str}_{'lips' if lips else 'no_lips'}"
+                    spec = {
+                        "run_name": run_name,
+                        "arch_name": arch_name,
+                        "lips": lips,
+                        "optimizer_name": optimizer_name,
+                        "optimizer_kwargs": optimizer_kwargs,
+                        "xy_size": xy_size,
+                        "num_pairs": num_pairs,
+                        "batch_size": batch_size,
+                        "project_name": project_name,
+                        "last_k": last_k,
+                    }
+                    # job_000.json naming
+                    job_id = f"{idx:03d}"
+                    out_path = os.path.join(arch_dir, f"job_{job_id}.json")
+                    with open(out_path, "w") as f:
+                        json.dump(spec, f, indent=2)
                 #print(f"  wrote {out_path}")
     print("\n=== Sweep generation complete ===")
 

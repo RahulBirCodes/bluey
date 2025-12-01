@@ -280,6 +280,7 @@ def run_from_config(config: ExperimentConfig):
     project_name: str = config["project_name"]
     base_ckpt_dir: str = config["base_ckpt_dir"]
     last_k: int = config["last_k"]
+    lips: bool = config["lips"]
 
     ckpt_dir = os.path.join(
         base_ckpt_dir,
@@ -304,7 +305,7 @@ def run_from_config(config: ExperimentConfig):
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
-    model = make_model(arch_name)
+    model = make_model(arch_name, lips=lips)
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
 
     opt_kwargs = {}
