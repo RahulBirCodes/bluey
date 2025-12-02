@@ -200,6 +200,25 @@ class TransformerBlock(nn.Module):
     return x
 
 
+class LinearEmbedding(nn.Linear):
+    """
+    Linear embedding layer that enforces per-row RMS = 1
+    """
+    def __init__(self, in_features: int, out_features: int, xy_size: int):
+        super().__init__(in_features, out_features, bias=False)
+        self.target_rms = 1.0 / (xy_size + 1) ** 0.5
+
+    @torch.no_grad()
+    def _renorm_rows(self):
+        W = self.weight
+        row_rms = W.pow(2).mean(dim=1, keepdim=True).sqrt()
+        W *= self.target_rms / (row_rms + 1e-12)
+
+    def forward(self, x):
+        self._renorm_rows()
+        return F.linear(x, self.weight, self.bias)
+
+
 class Transformer(nn.Module):
   def __init__(self,
                 hidden_size=256, 
@@ -214,15 +233,16 @@ class Transformer(nn.Module):
     self.n_layers = n_layers
     self.xy_size = xy_size
     self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips) for _ in range(n_layers)])
-    self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
+    if lips:
+      self.embedding = LinearEmbedding(2 * (xy_size + 1), hidden_size, xy_size)
+    else:
+      self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
     self.embedding.is_input_embedding = True
-    # emb should NOT use standard Xavier initialization
-    # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1
-    nn.init.normal_(self.embedding.weight, mean=0.0, std=(xy_size + 1)**-0.5)
     self.has_norm = norm_fn is not None
     if self.has_norm:
       self.norm = norm_fn(hidden_size)
     self.unembedding = nn.Linear(hidden_size, xy_size, bias=False)
+    self.unembedding.is_unembedding = True
   
   def forward(self, x):
     x = self.embedding(x)
@@ -236,6 +256,8 @@ class Transformer(nn.Module):
 @torch.no_grad()
 def orthogonal_init(m):
     if getattr(m, "is_input_embedding", False):
+        return
+    if getattr(m, "is_unembedding", False):
         return
     if isinstance(m, nn.Linear):
         w = m.weight
