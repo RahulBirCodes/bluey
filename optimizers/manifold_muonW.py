@@ -155,7 +155,7 @@ class ManifoldMuon(Optimizer):
         mm_alpha: float = 0.1,
         mm_tol: float = 1e-6,
         ADMM: bool = True,
-        mm_use_momentum: bool = False,
+        mm_use_momentum: bool = True,
         use_online: bool = False,
     ):
         if lr <= 0.0:
@@ -268,7 +268,7 @@ class ManifoldMuon(Optimizer):
                     bias_correction2 = 1.0 - beta2 ** state["step"]
 
                     denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(eps)
-                    step_size = lr / bias_correction1
+                    step_size = 1e-3 / bias_correction1
 
                     p.data.addcdiv_(exp_avg, denom, value=-step_size)
 

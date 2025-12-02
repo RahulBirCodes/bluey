@@ -83,7 +83,10 @@ class MultiHeadAttention(nn.Module):
     self.d_model = d_model
     self.n_heads = n_heads
     self.d_k = d_model // n_heads
-    self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+    # self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+    self.q = nn.Linear(d_model, d_model, bias=False)
+    self.k = nn.Linear(d_model, d_model, bias=False)
+    self.v = nn.Linear(d_model, d_model, bias=False)
     self.out = nn.Linear(d_model, d_model, bias=False)
     self.rope = RotaryEmbedding(self.d_k)
     self.lips = lips
@@ -109,10 +112,13 @@ class MultiHeadAttention(nn.Module):
   
   def forward(self, x):
     b, t, d = x.shape
-    qkv = self.qkv(x)
-    q = qkv[:, :, :self.d_model].contiguous()
-    k = qkv[:, :, self.d_model:2*self.d_model].contiguous()
-    v = qkv[:, :, 2*self.d_model:].contiguous()
+    # qkv = self.qkv(x)
+    q = self.q(x)
+    k = self.k(x)
+    v = self.v(x)
+    # q = qkv[:, :, :self.d_model].contiguous()
+    # k = qkv[:, :, self.d_model:2*self.d_model].contiguous()
+    # v = qkv[:, :, 2*self.d_model:].contiguous()
     q = self.split_heads(q)
     k = self.split_heads(k)
     v = self.split_heads(v)
@@ -257,8 +263,8 @@ class Transformer(nn.Module):
 def orthogonal_init(m):
     if getattr(m, "is_input_embedding", False):
         return
-    if getattr(m, "is_unembedding", False):
-        return
+    # if getattr(m, "is_unembedding", False):
+    #     return
     if isinstance(m, nn.Linear):
         w = m.weight
         if w.shape[0] >= w.shape[1]:
