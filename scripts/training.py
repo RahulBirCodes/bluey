@@ -6,7 +6,7 @@ import glob
 from collections import deque
 import time
 from ..optimizers.muonW1 import MuonW
-from ..optimizers.manifold_muonW import ManifoldMuonW
+from ..optimizers.manifold_muonW import ManifoldMuon
 from ..config_types.config_types import OptimizerKwargs, ExperimentConfig
 from ..model.model import make_model
 from ..model.model import orthogonal_init
@@ -258,7 +258,7 @@ class WandbLossLogger:
 OPTIMIZER_REGISTRY = {
     "AdamW": torch.optim.AdamW,
     "MuonW": MuonW,
-    "ManifoldMuonW": ManifoldMuonW,
+    "ManifoldMuon": ManifoldMuon,
 }
 
 def create_optimizer_groups(model, lr=0.001, weight_decay=0.0):
@@ -393,7 +393,7 @@ def run_from_config(config: ExperimentConfig):
 
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
     
-    if optimizer_name == "ManifoldMuonW":
+    if optimizer_name == "ManifoldMuon":
         param_groups = create_optimizer_groups(model, lr=opt_kwargs["lr"], weight_decay=opt_kwargs["weight_decay"])
         optimizer = optimizer_class(param_groups, **opt_kwargs)
 

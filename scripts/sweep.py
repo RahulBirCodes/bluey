@@ -41,12 +41,12 @@ HYPERPARAM_GRID_MUON = {
 
 """
 
-OPTIMIZER_NAMES = ['AdamW', 'MuonW', "ManifoldMuonW"]
+OPTIMIZER_NAMES = ['AdamW', 'MuonW', "ManifoldMuon"]
 
 OPTIMIZER_GRID_REGISTRY = {
     "AdamW": HYPERPARAM_GRID_ADAMW,
     "MuonW": HYPERPARAM_GRID_MUON,
-    "ManifoldMuonW": HYPERPARAM_GRID_MUON,
+    "ManifoldMuon": HYPERPARAM_GRID_MUON,
 }
 
 MODEL_ARCHS = ["rms", "standard", "none"]

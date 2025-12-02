@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model import MultiHeadAttention
 from optimizers.muonW1 import MuonW
-from optimizers.manifold_muonW import ManifoldMuonW
+from optimizers.manifold_muonW import ManifoldMuon
 from model import Transformer
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -85,7 +85,7 @@ def test_manifold_muonW(model, steps=40, batch_size=8, seq_len=5, lr=1e-3):
         else:
             rest_params.append(p)
 
-        optimizer = ManifoldMuonW(
+        optimizer = ManifoldMuon(
         [
             {"params": qkv_params, "manifold": True},   # Q/K/V and linear layers on Stiefel via manifold Muon
             {"params": rest_params, "manifold": False}, # everything else AdamW

@@ -135,7 +135,7 @@ def manifold_muon_step_online(
     return new_W, Lambda
 
 
-class ManifoldMuonW(Optimizer):
+class ManifoldMuon(Optimizer):
     """
     Hybrid optimizer:
       - For param groups with group['manifold'] == True:
