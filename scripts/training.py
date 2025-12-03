@@ -173,6 +173,8 @@ def train(
     batch_size=8,
     num_pairs=5,
     xy_size=5,
+    add_fake_dim=False,
+    add_input_noise=False,
     num_steps=1000,
     device="cuda",
     verbose=False,
@@ -200,6 +202,8 @@ def train(
             num_pairs=num_pairs,
             xy_size=xy_size,
             device=device,
+            add_fake_dim=add_fake_dim,
+            add_input_noise=add_input_noise,
         )
         outputs = model(tokens)
         B, S, D = outputs.shape
@@ -314,6 +318,8 @@ def run_from_config(config: ExperimentConfig):
     base_ckpt_dir: str = config["base_ckpt_dir"]
     last_k: int = config["last_k"]
     lips: bool = config["lips"]
+    add_fake_dim: bool = config["add_fake_dim"]
+    add_input_noise: bool = config["add_input_noise"]
 
     ckpt_dir = os.path.join(
         base_ckpt_dir,
@@ -338,7 +344,7 @@ def run_from_config(config: ExperimentConfig):
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
-    model = make_model(arch_name, lips=lips)
+    model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim)
 
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
     if optimizer_name == "ManifoldMuon":

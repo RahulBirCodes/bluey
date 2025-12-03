@@ -19,7 +19,9 @@ class ExperimentSpec(TypedDict):
     batch_size: int
     project_name: str
     last_k: int
-    
+    add_fake_dim: bool
+    add_input_noise: bool
+
 
 class RunOptions(TypedDict):
     job_id: str

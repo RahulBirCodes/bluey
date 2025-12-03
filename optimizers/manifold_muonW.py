@@ -148,8 +148,6 @@ class ManifoldMuon(Optimizer):
         self,
         params,
         lr: float = 1e-3,
-        # betas=(0.95, 0.95),     # [0] used as Muon-style momentum; [1] for AdamW's second moment
-        weight_decay: float = 0.0,
         eps: float = 1e-8,
         mm_steps: int = 50,
         mm_alpha: float = 0.1,
@@ -163,7 +161,6 @@ class ManifoldMuon(Optimizer):
 
         defaults = dict(
             lr=lr,
-            weight_decay=weight_decay,
             eps=eps,
             mm_steps=mm_steps,
             mm_alpha=mm_alpha,
@@ -181,7 +178,6 @@ class ManifoldMuon(Optimizer):
 
         for group in self.param_groups:
             lr = group["lr"]
-            weight_decay = group["weight_decay"]
             eps = group["eps"]
             mm_steps = group["mm_steps"]
             mm_alpha = group["mm_alpha"]
@@ -192,11 +188,6 @@ class ManifoldMuon(Optimizer):
                 if p.grad is None:
                     continue
                 grad = p.grad
-
-                # Muon style weight decay
-                # if weight_decay != 0.0:
-                #     p.data.mul_(1.0 - lr * weight_decay)
-
                 state = self.state[p]
 
                 # Initialize state lazily

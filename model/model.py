@@ -83,7 +83,6 @@ class MultiHeadAttention(nn.Module):
     self.d_model = d_model
     self.n_heads = n_heads
     self.d_k = d_model // n_heads
-    # self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
     self.q = nn.Linear(d_model, d_model, bias=False)
     self.k = nn.Linear(d_model, d_model, bias=False)
     self.v = nn.Linear(d_model, d_model, bias=False)
@@ -232,6 +231,7 @@ class Transformer(nn.Module):
                 n_layers=15, 
                 xy_size=5, 
                 lips=False,
+                add_fake_dim=False,
                 norm_fn=lambda d: RMSNorm(d, learnable=False)):
     super().__init__()
     self.hidden_size = hidden_size
@@ -239,11 +239,15 @@ class Transformer(nn.Module):
     self.n_layers = n_layers
     self.xy_size = xy_size
     self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips) for _ in range(n_layers)])
+    input_dim = 2 * (xy_size + 1) + (1 if add_fake_dim else 0)
     if lips:
-      self.embedding = LinearEmbedding(2 * (xy_size + 1), hidden_size, xy_size)
+      self.embedding = LinearEmbedding(input_dim, hidden_size, xy_size)
     else:
-      self.embedding = nn.Linear(2 * (xy_size + 1), hidden_size, bias=False)
+      self.embedding = nn.Linear(input_dim, hidden_size, bias=False)
     self.embedding.is_input_embedding = True
+    # emb should NOT use standard Xavier initialization
+    # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1
+    nn.init.normal_(self.embedding.weight, mean=0.0, std=(xy_size + 1 + (1 if add_fake_dim else 0))**-0.5)
     self.has_norm = norm_fn is not None
     if self.has_norm:
       self.norm = norm_fn(hidden_size)
@@ -263,8 +267,6 @@ class Transformer(nn.Module):
 def orthogonal_init(m):
     if getattr(m, "is_input_embedding", False):
         return
-    # if getattr(m, "is_unembedding", False):
-    #     return
     if isinstance(m, nn.Linear):
         w = m.weight
         if w.shape[0] >= w.shape[1]:
@@ -277,14 +279,14 @@ def orthogonal_init(m):
         if m.bias is not None:
             nn.init.zeros_(m.bias)
 
-def make_model(arch_name, lips=False):
+def make_model(arch_name, lips=False, add_fake_dim=False):
     if arch_name == "rms":
       ln = lambda d: RMSNorm(d, learnable=False)
     elif arch_name == "standard":
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None
-    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips)
+    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim)
     if lips:
       transformer.apply(orthogonal_init)
     return transformer

@@ -5,6 +5,8 @@ def get_batch(
     batch_size: int = 8,
     num_pairs: int = 5,     # T
     xy_size: int = 5,       # D
+    add_fake_dim: bool = False,
+    add_input_noise: bool = False,
     device=None
 ):
     """
@@ -33,7 +35,7 @@ def get_batch(
     """
 
     B, T, D = batch_size, num_pairs, xy_size
-    token_dim = 2 * (D + 1)   # [x_flag, y_flag, x_D, y_D]
+    token_dim = 2 * (D + 1) + (1 if add_fake_dim else 0)   # [x_flag, y_flag, x_D, y_D, [OPTIONAL 1]]
     X = torch.randn(B, T, D, device=device)
     W = torch.randn(B, D, D, device=device) / (D ** 0.5)
     Y = torch.einsum("btd,bdk->btk", X, W)
@@ -52,20 +54,17 @@ def get_batch(
 
     tokens = torch.zeros(B, 2*T, token_dim, device=device)
     b_ind = torch.arange(B, device=device).unsqueeze(1)
+    t_ind = torch.arange(2*T, device=device).unsqueeze(0)
     tokens[b_ind, x_pos, 0] = 1.0
     tokens[b_ind, x_pos, 2:2+xy_size] = X
     tokens[b_ind, y_pos, 1] = 1.0
     tokens[b_ind, y_pos, 2+xy_size:2+2*xy_size] = Y
+    # add fake dim for bias
+    if add_fake_dim:
+        tokens[b_ind, t_ind, -1] = 1.0
+    # add input noise during training
+    if add_input_noise:
+        noise = torch.randn(B, T, D, device=device) * 0.01
+        tokens[b_ind, x_pos, 2:2+D] += noise
     # return x_pos since model outputs y_preds there
-
-    
     return tokens, X, Y, W, x_pos
-
-if __name__ == "__main__":
-    tokens, X, Y, W, x_pos = get_batch(64, 48, 5, "cpu")
-
-    X_norm = torch.norm(X)
-    Y_norm = torch.norm(Y)
-
-    print(f"X_norm: {X_norm} Y_norm: {Y_norm}")
-    print(f"first ten tokens of one batch: {tokens[0, :10, :]}")
