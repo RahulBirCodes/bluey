@@ -392,7 +392,7 @@ def run_from_config(config: ExperimentConfig):
 
     optimizer = optimizer_class(model.parameters(), **opt_kwargs)
     
-    if optimizer_name == "ManifoldMuonW":
+    if optimizer_name == "ManifoldMuonW" or "MuonW":
         param_groups = create_optimizer_groups(model, lr=opt_kwargs["lr"], weight_decay=opt_kwargs["weight_decay"])
         optimizer = optimizer_class(param_groups, **opt_kwargs)
 
