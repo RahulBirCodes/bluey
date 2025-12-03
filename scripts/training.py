@@ -389,12 +389,12 @@ def run_from_config(config: ExperimentConfig):
     for k in ["momentum", "nesterov"]:
         if k in optimizer_kwargs:
             opt_kwargs[k] = optimizer_kwargs[k]
-
-    optimizer = optimizer_class(model.parameters(), **opt_kwargs)
     
     if optimizer_name == "ManifoldMuonW" or "MuonW":
         param_groups = create_optimizer_groups(model, lr=opt_kwargs["lr"], weight_decay=opt_kwargs["weight_decay"])
         optimizer = optimizer_class(param_groups, **opt_kwargs)
+    else:
+        optimizer = optimizer_class(model.parameters(), **opt_kwargs)
 
     if resume_from is None:
         model.apply(orthogonal_init)
