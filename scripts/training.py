@@ -144,6 +144,26 @@ class WarmupConstantDecayLrScheduler:
         self.last_step += 1
 
 
+class JointOptimizer:
+    def __init__(self, *optimizers):
+        self.optimizers = optimizers
+
+    def step(self):
+        for opt in self.optimizers:
+            opt.step()
+
+    def zero_grad(self, set_to_none=False):
+        for opt in self.optimizers:
+            opt.zero_grad(set_to_none=set_to_none)
+
+    def state_dict(self):
+        return [opt.state_dict() for opt in self.optimizers]
+
+    def load_state_dict(self, state_dicts):
+        for opt, sd in zip(self.optimizers, state_dicts):
+            opt.load_state_dict(sd)
+
+
 def train(
     model,
     optimizer,
@@ -203,10 +223,9 @@ def train(
                 step=step + 1,
                 path=ckpt_path,
                 scheduler=scheduler,
-                save_fn=save_fn,   # torch.save or xm.save
+                save_fn=save_fn,
             )
 
-            #add wandb artifact logging
             if logger is not None and hasattr(logger, "run"):
                 artifact = wandb.Artifact(
                     name=f"ckpt_step_{step+1}",
@@ -261,71 +280,19 @@ OPTIMIZER_REGISTRY = {
     "ManifoldMuon": ManifoldMuon,
 }
 
-def create_optimizer_groups(model, lr=0.001, weight_decay=0.0):
-    """
-    Splits model parameters into two groups:
-    1. Manifold Group: 2D+ weights (Linear layers) EXCLUDING the readout head.
-       - optimized via Muon (Stiefel updates).
-    2. Standard Group: 1D weights (Norms, Biases) AND the readout head.
-       - optimized via AdamW.
-    """
-    manifold_params = []
-    standard_params = []
-    embedding_params = []
-    unembedding_params = []
-
-    # Iterate over named parameters to filter by name AND shape
+def create_optimizer_groups(model):
+    std_params = []
+    adam_params = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-
-        # 1. Check if this is the Readout/Unembedding layer
-        # Your Transformer class calls it "unembedding"
-        if "unembedding" in name:
-            print(f"Assigning {name} to Unmbeddding (RMS Norm Column) - Reason: Sparse input")
-            unembedding_params.append(param)
-
-        elif "embedding" in name:
-            print(f"Assigning {name} to Embeddding (RMS Norm (1/2) Column) - Reason: Readout Head")
-            embedding_params.append(param)
-
-        # 2. Check dimensions
-        # Biases, LayerNorm scales, and 1D tensors must be Standard
-        elif param.ndim < 2:
-            print(f"Assigning {name} to Standard (AdamW) - Reason: 1D parameter")
-            standard_params.append(param)
-
-        # 3. Everything else (2D matrices) is Manifold
+        if "unembedding" in name or "embedding" in name:
+            adam_params.append(param)
+            continue
         else:
-            print(f"Assigning {name} to Manifold (Muon)")
-            manifold_params.append(param)
+            std_params.append(param)
+    return std_params, adam_params
 
-    return [
-        {
-            "params": manifold_params,
-            "type": "manifold",          # Flag for your Optimizer
-            "lr": lr*20,                # Muon typically handles/needs higher LR
-            "weight_decay": weight_decay
-        },
-        {
-            "params": standard_params,
-            "type": "standard",         # Flag for your Optimizer
-            "lr": lr,               # Standard AdamW LR
-            "weight_decay": weight_decay
-        },
-        {
-            "params": embedding_params,
-            "type": "embedding",         # Flag for your Optimizer
-            "lr": lr,               # Standard AdamW LR
-            "weight_decay": weight_decay
-        },
-        {
-            "params": unembedding_params,
-            "type": "unembedding",         # Flag for your Optimizer
-            "lr": lr,               # Standard AdamW LR
-            "weight_decay": weight_decay
-        }
-    ]
 
 def run_from_config(config: ExperimentConfig):
     """
@@ -363,7 +330,7 @@ def run_from_config(config: ExperimentConfig):
     run = wandb.init(
         entity="bluey-merdifold",
         project=project_name,
-        name=run_name,  # wandb name limit
+        name=run_name,
         group=group_name,
         config=config,
         reinit=True,
@@ -372,30 +339,16 @@ def run_from_config(config: ExperimentConfig):
 
     logger = WandbLossLogger(run, last_k=last_k)
     model = make_model(arch_name, lips=lips)
+
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
-
-    opt_kwargs = {}
-    
-    if "lr" in optimizer_kwargs:
-        opt_kwargs["lr"] = optimizer_kwargs["lr"]
-    if "weight_decay" in optimizer_kwargs:
-        opt_kwargs["weight_decay"] = optimizer_kwargs["weight_decay"]
-
-    # Handle beta1 / beta2 -> betas, if they exist
-    if "beta1" in optimizer_kwargs and "beta2" in optimizer_kwargs:
-        opt_kwargs["betas"] = (optimizer_kwargs["beta1"], optimizer_kwargs["beta2"])
-
-    # Muon / Manifold Muon might have other fields, e.g. "momentum"
-    # Pass any remaining optimizer-specific keys explicitly if you need:
-    for k in ["momentum", "nesterov"]:
-        if k in optimizer_kwargs:
-            opt_kwargs[k] = optimizer_kwargs[k]
-
-    optimizer = optimizer_class(model.parameters(), **opt_kwargs)
-    
     if optimizer_name == "ManifoldMuon":
-        param_groups = create_optimizer_groups(model, lr=opt_kwargs["lr"], weight_decay=opt_kwargs["weight_decay"])
-        optimizer = optimizer_class(param_groups, **opt_kwargs)
+        std_params, adam_params = create_optimizer_groups(model)
+        optimizer = JointOptimizer(
+            optimizer_class(std_params, **optimizer_kwargs),
+            torch.optim.Adam(adam_params, lr=1e-3, betas=(0.9, 0.98))
+        )   
+    else:
+        optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
 
     if resume_from is None:
         model.apply(orthogonal_init)

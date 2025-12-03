@@ -148,35 +148,27 @@ class ManifoldMuon(Optimizer):
         self,
         params,
         lr: float = 1e-3,
-        betas=(0.95, 0.95),     # [0] used as Muon-style momentum; [1] for AdamW's second moment
+        # betas=(0.95, 0.95),     # [0] used as Muon-style momentum; [1] for AdamW's second moment
         weight_decay: float = 0.0,
         eps: float = 1e-8,
         mm_steps: int = 50,
         mm_alpha: float = 0.1,
         mm_tol: float = 1e-6,
-        ADMM: bool = True,
-        mm_use_momentum: bool = True,
-        use_online: bool = False,
+        mm_momentum: float = 0.95,
     ):
         if lr <= 0.0:
             raise ValueError(f"Invalid learning rate: {lr}")
         if not 0.0 <= eps:
             raise ValueError(f"Invalid epsilon: {eps}")
-        if not 0.0 <= betas[0] < 1.0:
-            raise ValueError(f"Invalid beta1: {betas[0]}")
-        if not 0.0 <= betas[1] < 1.0:
-            raise ValueError(f"Invalid beta2: {betas[1]}")
 
         defaults = dict(
             lr=lr,
-            betas=betas,
             weight_decay=weight_decay,
             eps=eps,
             mm_steps=mm_steps,
             mm_alpha=mm_alpha,
             mm_tol=mm_tol,
-            ADMM=ADMM,
-            mm_use_momentum=mm_use_momentum,
+            mm_momentum=mm_momentum,
         )
         super().__init__(params, defaults)
 
@@ -188,88 +180,55 @@ class ManifoldMuon(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            #print(f"group: {group}, group['params'] {group['params']}")
             lr = group["lr"]
-            beta1, beta2 = group["betas"]
             weight_decay = group["weight_decay"]
             eps = group["eps"]
             mm_steps = group["mm_steps"]
             mm_alpha = group["mm_alpha"]
             mm_tol = group["mm_tol"]
-            mm_use_momentum = group.get("mm_use_momentum", False)
-            ADMM = group.get("ADMM", True)
-            type = group.get("type", "standard")
+            mm_momentum = group.get("mm_momentum", 0)
 
             for p in group["params"]:
-
                 if p.grad is None:
                     continue
                 grad = p.grad
 
-                # Decoupled weight decay
-                if weight_decay != 0.0:
-                    p.data.mul_(1.0 - lr * weight_decay)
+                # Muon style weight decay
+                # if weight_decay != 0.0:
+                #     p.data.mul_(1.0 - lr * weight_decay)
 
                 state = self.state[p]
 
                 # Initialize state lazily
                 if len(state) == 0:
                     state["step"] = 0
-                    # AdamW stats
-                    state["exp_avg"] = torch.zeros_like(p)
-                    state["exp_avg_sq"] = torch.zeros_like(p)
                     # Muon-style momentum for manifold params
-                    state["muon_m"] = torch.zeros_like(p)
-                    
-                    if type == "manifold" and p.ndim >= 2:
-                        # Lambda initialization (Square matrix of size min(rows, cols))
-                        dim = min(p.shape[0], p.shape[1])
-                        state["lambda"] = torch.zeros((dim, dim), device=p.device, dtype=p.dtype)
+                    state["mm_moment"] = torch.zeros_like(p)
+                    dim = min(p.shape[0], p.shape[1])
+                    state["lambda"] = torch.zeros((dim, dim), device=p.device, dtype=p.dtype)
 
                 state["step"] += 1
-                exp_avg, exp_avg_sq, muon_m = (
-                    state["exp_avg"],
-                    state["exp_avg_sq"],
-                    state["muon_m"],
-                )
 
-                # AdamW moments always maintained (even if not used)
-                exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
-                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
-
-                if type == "manifold" and p.ndim >= 2:
-                    # --- MANIFOLD MUON BRANCH ---
-                    
-                    # 1. Momentum handling
-                    if mm_use_momentum:
-                        # Update Muon momentum buffer
-                        state["muon_m"].mul_(beta1).add_(grad, alpha=1.0 - beta1)
-                        G_eff = state["muon_m"]
-                    else:
-                        G_eff = grad
-
-                    # 2. Perform Online Manifold Step
-                    # Note: We pass the persistent Lambda
-                    new_W, new_Lambda = manifold_muon_step_online(
-                        p.data,
-                        G_eff,
-                        state["lambda"],
-                        lr=lr,
-                        alpha=mm_alpha
-                    )
-                    
-                    # 3. Apply updates
-                    p.data.copy_(new_W)
-                    state["lambda"].copy_(new_Lambda)
-                
+                # 1. Momentum handling
+                if mm_momentum > 0:
+                    # Update Muon momentum buffer
+                    state["mm_moment"].mul_(mm_momentum).add_(grad, alpha=1.0 - mm_momentum)
+                    G_eff = state["mm_moment"]
                 else:
-                    # ---- AdamW branch ----
-                    bias_correction1 = 1.0 - beta1 ** state["step"]
-                    bias_correction2 = 1.0 - beta2 ** state["step"]
+                    G_eff = grad
 
-                    denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(eps)
-                    step_size = 1e-3 / bias_correction1
-
-                    p.data.addcdiv_(exp_avg, denom, value=-step_size)
+                # 2. Perform Online Manifold Step
+                # Note: We pass the persistent Lambda
+                new_W, new_Lambda = manifold_muon_step_online(
+                    p.data,
+                    G_eff,
+                    state["lambda"],
+                    lr=lr,
+                    alpha=mm_alpha
+                )
+                
+                # 3. Apply updates
+                p.data.copy_(new_W)
+                state["lambda"].copy_(new_Lambda)
 
         return loss

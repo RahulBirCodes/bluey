@@ -3,8 +3,7 @@ from typing import TypedDict
 class OptimizerKwargs(TypedDict, total=False):
     lr: float
     weight_decay: float
-    beta1: float
-    beta2: float
+    betas: tuple[float, float]
     momentum: float
     nesterov: bool
 
