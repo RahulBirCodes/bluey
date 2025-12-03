@@ -15,44 +15,24 @@ class MuonW(Optimizer):
     """
 
     def __init__(self, param_groups, **optimizer_kwargs):
-        # -------- Normalize param_groups to a list of dicts with "params" --------
-        if isinstance(param_groups, (torch.nn.Parameter, torch.Tensor)):
-            param_groups = [param_groups]
-        elif isinstance(param_groups, dict):
+        if isinstance(param_groups, dict):
             param_groups = [param_groups]
 
         param_groups = list(param_groups)
 
-        normalized_groups = []
-        for g in param_groups:
-            if isinstance(g, dict):
-                params = g.get("params", [])
-                if isinstance(params, (torch.nn.Parameter, torch.Tensor)):
-                    params = [params]
-                else:
-                    params = list(params)
-                if not params:
-                    continue
-                g = dict(g)          # shallow copy, so we don't mutate caller's dict
-                g["params"] = params
-                normalized_groups.append(g)
-            else:
-                # bare iterable / tensor
-                params = g
-                if isinstance(params, (torch.nn.Parameter, torch.Tensor)):
-                    params = [params]
-                else:
-                    params = list(params)
-                if not params:
-                    continue
-                normalized_groups.append({"params": params})
-
-        if not normalized_groups:
+        # Error Checking
+        if not param_groups:
             raise ValueError("MuonW got an empty parameter list")
+        for g in param_groups:
+            if not isinstance(g, dict):
+                raise TypeError("Each param_group must be a dict")
+            if "params" not in g:
+                raise ValueError("Each param_group must have a 'params' key")
+            if "type" not in g:
+                raise ValueError("Each param_group must have a 'type' key")
 
-        # Let the base Optimizer manage param_groups normally
-        super().__init__(normalized_groups, defaults={})
-        # self.param_groups is now this normalized list of dicts
+        # Let base Optimizer manage param_groups/state
+        super().__init__(param_groups, defaults={})
 
         # -------- Build kwargs for underlying optimizers --------
         adamw_kwargs: dict = {}
@@ -79,24 +59,14 @@ class MuonW(Optimizer):
         for k in ("momentum", "nesterov"):
             if k in optimizer_kwargs:
                 muon_kwargs[k] = optimizer_kwargs[k]
-
+ 
         # -------- Split groups by "type" field --------
-        manifold_groups = []
-        other_groups = []
-
-        for group in self.param_groups:
-            params = group.get("params", [])
-            if not params:
-                continue
-
-            if group.get("type") == "manifold":
-                manifold_groups.append(group)
-            else:
-                other_groups.append(group)
+        manifold_groups = [g for g in self.param_groups if g.get("type") == "manifold"]
+        other_groups = [g for g in self.param_groups if g.get("type") != "manifold"]
 
         # -------- Instantiate underlying optimizers --------
-        self.muon = (torch.optim.Muon(manifold_groups, **muon_kwargs))
-        self.adamw = (torch.optim.AdamW(other_groups, **adamw_kwargs))
+        self.muon = torch.optim.Muon(manifold_groups, **muon_kwargs)
+        self.adamw = torch.optim.AdamW(other_groups, **adamw_kwargs)
 
     # -------- Standard optimizer API forwarded to both inner opts --------
 
