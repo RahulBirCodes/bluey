@@ -255,14 +255,14 @@ class Transformer(nn.Module):
                 xy_size=5, 
                 lips=False,
                 add_fake_dim=False,
-                max_manifold_linear_gain=None,
+                manifold_linear_gain_cap=None,
                 norm_fn=lambda d: RMSNorm(d, learnable=False)):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
     self.n_layers = n_layers
     self.xy_size = xy_size
-    self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips) for _ in range(n_layers)])
+    self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips, manifold_linear_gain_cap=manifold_linear_gain_cap) for _ in range(n_layers)])
     input_dim = 2 * (xy_size + 1) + (1 if add_fake_dim else 0)
     if lips:
       self.embedding = LinearEmbedding(input_dim, hidden_size, xy_size)
@@ -303,14 +303,14 @@ def orthogonal_init(m):
         if m.bias is not None:
             nn.init.zeros_(m.bias)
 
-def make_model(arch_name, lips=False, add_fake_dim=False, add_manifold_linear_gain=False):
+def make_model(arch_name, lips=False, add_fake_dim=False, manifold_linear_gain_cap=None):
     if arch_name == "rms":
       ln = lambda d: RMSNorm(d, learnable=False)
     elif arch_name == "standard":
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None
-    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim, add_manifold_linear_gain=add_manifold_linear_gain)
+    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
     if lips:
       transformer.apply(orthogonal_init)
     return transformer
