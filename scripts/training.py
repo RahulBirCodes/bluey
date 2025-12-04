@@ -12,6 +12,7 @@ from ..model.model import make_model
 from ..model.model import orthogonal_init
 from ..scripts.dataset import get_batch as get_ols_batch
 import datetime
+from typing import Optional
 
 # Optional TPU support
 try:
@@ -290,9 +291,9 @@ def create_optimizer_groups(model):
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        if "unembedding" in name or "embedding" in name:
+        # run Adam on emb, unemb, and gain parameters
+        if "unembedding" in name or "embedding" in name or "gain" in name:
             adam_params.append(param)
-            continue
         else:
             std_params.append(param)
     return std_params, adam_params
@@ -320,6 +321,7 @@ def run_from_config(config: ExperimentConfig):
     lips: bool = config["lips"]
     add_fake_dim: bool = config["add_fake_dim"]
     add_input_noise: bool = config["add_input_noise"]
+    manifold_linear_gain_cap: Optional[float] = config["manifold_linear_gain_cap"]
 
     ckpt_dir = os.path.join(
         base_ckpt_dir,
@@ -344,7 +346,7 @@ def run_from_config(config: ExperimentConfig):
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
-    model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim)
+    model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
 
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
     if optimizer_name == "ManifoldMuon":
@@ -374,7 +376,9 @@ def run_from_config(config: ExperimentConfig):
         checkpoint_dir=ckpt_dir,
         resume_from=resume_from,
         verbose=True,
-        scheduler=scheduler
+        scheduler=scheduler,
+        add_fake_dim=add_fake_dim,
+        add_input_noise=add_input_noise,
     )
 
     avg_last_k_loss = logger.get_last_k_loss()
