@@ -71,16 +71,41 @@ class LayerNorm(nn.Module):
     x_norm = (x - mean) * torch.rsqrt(variance + self.eps)
     return x_norm * self.scale + self.bias
 
+class ManifoldLinearGain(nn.Module):
+    """
+    Linear layer that multiples a capped diagonal gain matrix for manifold updates.
+    """
+    def __init__(self, in_features, out_features, max_gain=10.0):
+        super().__init__()
+        self.max_gain = max_gain
+        self.linear = nn.Linear(in_features, out_features, bias=False)
+        self.gain = nn.Parameter(torch.ones(out_features))
+
+    def forward(self, x):
+        # clip gain
+        if self.max_gain is not None:
+            with torch.no_grad():
+                self.gain.clamp_(min=0.001, max=self.max_gain)
+
+        out = self.linear(x)
+        out = out * self.gain
+        return out   
+
 class MultiHeadAttention(nn.Module):
-  def __init__(self, d_model=256, n_heads=8, lips=False):
+  def __init__(self, d_model=256, n_heads=8, lips=False, manifold_linear_gain_cap=None):
     super().__init__()
     self.d_model = d_model
     self.n_heads = n_heads
     self.d_k = d_model // n_heads
-    self.q = nn.Linear(d_model, d_model, bias=False)
-    self.k = nn.Linear(d_model, d_model, bias=False)
-    self.v = nn.Linear(d_model, d_model, bias=False)
-    self.out = nn.Linear(d_model, d_model, bias=False)
+    # self.q = nn.Linear(d_model, d_model, bias=False)
+    # self.k = nn.Linear(d_model, d_model, bias=False)
+    # self.v = nn.Linear(d_model, d_model, bias=False)
+    if manifold_linear_gain_cap is not None:
+      self.qkv = ManifoldLinearGain(d_model, 3 * d_model, max_gain=manifold_linear_gain_cap)
+      self.out = ManifoldLinearGain(d_model, d_model, max_gain=manifold_linear_gain_cap)
+    else:
+      self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+      self.out = nn.Linear(d_model, d_model, bias=False)
     self.rope = RotaryEmbedding(self.d_k)
     self.lips = lips
 
@@ -105,13 +130,13 @@ class MultiHeadAttention(nn.Module):
   
   def forward(self, x):
     b, t, d = x.shape
-    # qkv = self.qkv(x)
-    q = self.q(x)
-    k = self.k(x)
-    v = self.v(x)
-    # q = qkv[:, :, :self.d_model].contiguous()
-    # k = qkv[:, :, self.d_model:2*self.d_model].contiguous()
-    # v = qkv[:, :, 2*self.d_model:].contiguous()
+    qkv = self.qkv(x)
+    # q = self.q(x)
+    # k = self.k(x)
+    # v = self.v(x)
+    q = qkv[:, :, :self.d_model].contiguous()
+    k = qkv[:, :, self.d_model:2*self.d_model].contiguous()
+    v = qkv[:, :, 2*self.d_model:].contiguous()
     q = self.split_heads(q)
     k = self.split_heads(k)
     v = self.split_heads(v)
@@ -121,7 +146,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None, lips=False):
+  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None, lips=False, manifold_linear_gain_cap=None):
     super().__init__()
     self.n_layers = n_layers
     self.hidden_size = hidden_size
@@ -129,7 +154,7 @@ class AttentionBlock(nn.Module):
     self.has_norm = norm_fn is not None
     if self.has_norm:
       self.norm = norm_fn(hidden_size)
-    self.mha = MultiHeadAttention(hidden_size, n_heads, lips=lips)
+    self.mha = MultiHeadAttention(hidden_size, n_heads, lips=lips, manifold_linear_gain_cap=manifold_linear_gain_cap)
     self.lips = lips
   
   def forward(self, x):
@@ -146,10 +171,14 @@ class AttentionBlock(nn.Module):
 
 
 class SwiGLU(nn.Module):
-  def __init__(self, hidden_size=256):
+  def __init__(self, hidden_size=256, manifold_linear_gain_cap=None):
       super().__init__()
-      self.fc1 = nn.Linear(hidden_size, 2 * 2 * hidden_size, bias=False)
-      self.fc2 = nn.Linear(2 * hidden_size, hidden_size, bias=False)
+      if manifold_linear_gain_cap is not None:
+        self.fc1 = ManifoldLinearGain(hidden_size, 2 * 2 * hidden_size, max_gain=manifold_linear_gain_cap)
+        self.fc2 = ManifoldLinearGain(2 * hidden_size, hidden_size, max_gain=manifold_linear_gain_cap)
+      else:
+        self.fc1 = nn.Linear(hidden_size, 2 * 2 * hidden_size, bias=False)
+        self.fc2 = nn.Linear(2 * hidden_size, hidden_size, bias=False)
       self.beta = nn.Parameter(torch.tensor(1.0))
 
   def forward(self, x):
@@ -161,14 +190,14 @@ class SwiGLU(nn.Module):
 
 
 class MLP(nn.Module):
-  def __init__(self, n_layers=15, hidden_size=256, norm_fn=None, lips=False):
+  def __init__(self, n_layers=15, hidden_size=256, norm_fn=None, lips=False, manifold_linear_gain_cap=None):
     super().__init__()
     self.n_layers = n_layers
     self.hidden_size = hidden_size
     self.has_norm = norm_fn is not None
     if self.has_norm:
       self.norm = norm_fn(hidden_size)
-    self.swiglu = SwiGLU(hidden_size)
+    self.swiglu = SwiGLU(hidden_size, manifold_linear_gain_cap=manifold_linear_gain_cap)
     self.lips = lips
 
   def forward(self, x):
@@ -185,13 +214,13 @@ class MLP(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None, lips=False):
+  def __init__(self, n_layers=15, hidden_size=256, n_heads=8, norm_fn=None, lips=False, manifold_linear_gain_cap=None):
     super().__init__()
     self.n_layers = n_layers
     self.hidden_size = hidden_size
     self.n_heads = n_heads
-    self.attn = AttentionBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips)
-    self.mlp = MLP(n_layers, hidden_size, norm_fn=norm_fn, lips=lips)
+    self.attn = AttentionBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips, manifold_linear_gain_cap=manifold_linear_gain_cap)
+    self.mlp = MLP(n_layers, hidden_size, norm_fn=norm_fn, lips=lips, manifold_linear_gain_cap=manifold_linear_gain_cap)
   
   def forward(self, x):
     x = self.attn(x)
@@ -201,7 +230,7 @@ class TransformerBlock(nn.Module):
 
 class LinearEmbedding(nn.Linear):
     """
-    Linear embedding layer that enforces per-row RMS = 1
+    Linear embedding layer that enforces per-row output emb RMS = 1
     """
     def __init__(self, in_features: int, out_features: int, xy_size: int):
         super().__init__(in_features, out_features, bias=False)
@@ -226,13 +255,14 @@ class Transformer(nn.Module):
                 xy_size=5, 
                 lips=False,
                 add_fake_dim=False,
+                manifold_linear_gain_cap=None,
                 norm_fn=lambda d: RMSNorm(d, learnable=False)):
     super().__init__()
     self.hidden_size = hidden_size
     self.n_heads = n_heads
     self.n_layers = n_layers
     self.xy_size = xy_size
-    self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips) for _ in range(n_layers)])
+    self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips, manifold_linear_gain_cap=manifold_linear_gain_cap) for _ in range(n_layers)])
     input_dim = 2 * (xy_size + 1) + (1 if add_fake_dim else 0)
     if lips:
       self.embedding = LinearEmbedding(input_dim, hidden_size, xy_size)
@@ -274,14 +304,14 @@ def orthogonal_init(m):
         if m.bias is not None:
             nn.init.zeros_(m.bias)
 
-def make_model(arch_name, lips=False, add_fake_dim=False):
+def make_model(arch_name, lips=False, add_fake_dim=False, manifold_linear_gain_cap=None):
     if arch_name == "rms":
       ln = lambda d: RMSNorm(d, learnable=False)
     elif arch_name == "standard":
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None
-    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim)
+    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
     if lips:
       transformer.apply(orthogonal_init)
     return transformer

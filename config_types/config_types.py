@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, Optional
 
 class OptimizerKwargs(TypedDict, total=False):
     lr: float
@@ -21,6 +21,7 @@ class ExperimentSpec(TypedDict):
     last_k: int
     add_fake_dim: bool
     add_input_noise: bool
+    manifold_linear_gain_cap: Optional[float]
 
 
 class RunOptions(TypedDict):
