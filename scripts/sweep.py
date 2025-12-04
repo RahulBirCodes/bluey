@@ -6,10 +6,10 @@ import os
 
 
 HYPERPARAM_GRID_ADAMW = {
-    "lr": [3e-4, 1e-3],
+    "lr": [1e-5, 1e-4, 1e-3],
     "beta1": [0.9],
-    "beta2": [0.98],
-    "weight_decay": [0.0, 0.1],
+    "beta2": [0.95, 0.999],
+    "weight_decay": [0.0, 0.01, 0.1],
     "batch_size": [64, 256],
 }
 
