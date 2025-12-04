@@ -348,30 +348,21 @@ def run_from_config(config: ExperimentConfig):
     logger = WandbLossLogger(run, last_k=last_k)
     model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
 
-    # opt_kwargs = {}
+    adam_kwargs = {}
+    if "lr" in optimizer_kwargs:
+        adam_kwargs["lr"] = optimizer_kwargs["lr"]
+    if "weight_decay" in optimizer_kwargs:
+        adam_kwargs["weight_decay"] = optimizer_kwargs["weight_decay"]
+    if "beta1" in optimizer_kwargs and "beta2" in optimizer_kwargs:
+        adam_kwargs["betas"] = (optimizer_kwargs["beta1"], optimizer_kwargs["beta2"])
+    del optimizer_kwargs["betas"]
     
-    # if "lr" in optimizer_kwargs:
-    #     opt_kwargs["lr"] = optimizer_kwargs["lr"]
-    # if "weight_decay" in optimizer_kwargs:
-    #     opt_kwargs["weight_decay"] = optimizer_kwargs["weight_decay"]
-
-    # # Handle beta1 / beta2 -> betas, if they exist
-    # if "beta1" in optimizer_kwargs and "beta2" in optimizer_kwargs:
-    #     opt_kwargs["betas"] = (optimizer_kwargs["beta1"], optimizer_kwargs["beta2"])
-
-    # # Muon / Manifold Muon might have other fields, e.g. "momentum"
-    # # Pass any remaining optimizer-specific keys explicitly if you need:
-    # for k in ["momentum", "nesterov"]:
-    #     if k in optimizer_kwargs:
-    #         opt_kwargs[k] = optimizer_kwargs[k]
-
-    # optimizer_kwargs = opt_kwargs
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
     if optimizer_name == "ManifoldMuon" or optimizer_name == "Muon":
         std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
-            torch.optim.AdamW(adam_params, lr=1e-3, betas=(0.9, 0.98))
+            torch.optim.AdamW(adam_params, **adam_kwargs)
         )   
     else:
         optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
