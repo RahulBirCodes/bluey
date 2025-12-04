@@ -347,8 +347,9 @@ def get_input_ouput(inputs, outputs, name):
 def create_hooks(inputs, outputs, model):
     # Iterate over modules, not parameters
     for name, module in model.named_modules():
-        handle = module.register_forward_hook(get_input_ouput(inputs,outputs, name))
-        print(f"Registered hook on {name}: {handle}")
+        if "mha" not in name and "swiglu" not in name:
+            handle = module.register_forward_hook(get_input_ouput(inputs,outputs, name))
+            print(f"Registered hook on {name}: {handle}")
 
 OPTIMIZER_REGISTRY = {
     "AdamW": torch.optim.AdamW,
