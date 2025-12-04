@@ -164,7 +164,7 @@ class AttentionBlock(nn.Module):
       t = x
     t, _ = self.mha(t)
     if self.lips:
-      out = t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
+      out = t + x
     else:
       out = t + x
     return out
