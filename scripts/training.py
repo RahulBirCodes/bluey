@@ -425,7 +425,7 @@ def run_from_config(config: ExperimentConfig):
         std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
-            torch.optim.Adam(adam_params, lr=1e-3, betas=(0.9, 0.98))
+            torch.optim.Adam(adam_params, lr=0.01, betas=(0.9, 0.98), weight_decay=0.01)
         )   
     else:
         optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
