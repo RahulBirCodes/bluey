@@ -191,6 +191,7 @@ def train(
     checkpoint_dir=None,
     resume_from: str | None = None,
     scheduler=None,
+    log_layer=20,
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
@@ -202,8 +203,18 @@ def train(
     prev_step = 0
     if resume_from:
         prev_step = load_checkpoint(model, optimizer, resume_from, device=device, scheduler=scheduler)
-       
+    
+
+    outputs_dict = {}
+    inputs_dict = {}
+
+    if log_layer:
+        print("are we getting here?")
+        create_hooks(inputs_dict, outputs_dict, model)
+    
     for step in range(prev_step, num_steps):
+        
+        
         iter_start = time.time()
         tokens, X, Y, W, x_token_indices = get_batch(
             batch_size=batch_size,
@@ -224,6 +235,12 @@ def train(
         optimizer_step_fn(optimizer)
         if scheduler is not None:
             scheduler.step()
+
+        if step % log_layer == 0:
+            log_layer_stats(inputs_dict=inputs_dict,
+                            outputs_dict=outputs_dict,
+                            logger=logger)
+            
 
         if checkpoint_dir is not None and step % checkpoint_every == 0 and step != 0:
             now = datetime.datetime.now()
@@ -263,6 +280,36 @@ def train(
     return model
 
 
+def log_layer_stats(inputs_dict, outputs_dict, logger):
+    parts = ["Test"]  # e.g. to namespace different phases
+    metrics = {}
+        
+    for name in outputs_dict.keys():
+        # Build a prefix like "Test.fc2.0"
+        prefix = ".".join(parts + [name])
+
+        out_tensor = outputs_dict[name]
+                
+        in_tensor = inputs_dict[name]
+        if isinstance(in_tensor, list):
+            if len(in_tensor) > 1:
+                in_norm  = in_tensor[0].detach().norm().item() + in_tensor[1].detach().norm().item()
+                metrics[f"{prefix}/input_norm(2x)"]  = in_norm
+            else:
+                in_norm  = in_tensor[0].detach().norm().item()
+                metrics[f"{prefix}/input_norm"]  = in_norm
+        else:
+            in_norm  = in_tensor.detach().norm().item()
+            metrics[f"{prefix}/input_norm"]  = in_norm
+        if isinstance(out_tensor, list):
+            out_norm  = out_tensor[0].detach().norm().item()
+            metrics[f"{prefix}/output_norm(first)"]  = out_norm
+        else:
+            out_norm  = out_tensor.detach().norm().item()
+            metrics[f"{prefix}/output_norm"]  = out_norm                
+        
+    logger.log(metrics)
+
 class WandbLossLogger:
     """
     Wraps a wandb.Run-like object to:
@@ -285,6 +332,23 @@ class WandbLossLogger:
     def finish(self):
         self.run.finish()
 
+def get_input_ouput(inputs, outputs, name):
+    def hook(module, input, output):
+        if isinstance(input, tuple):
+            inputs[name] = [x.detach().clone() for x in input if hasattr(x, "detach")]
+        else:
+            inputs[name] = input.detach().clone()
+        if isinstance(output, tuple):
+            outputs[name] = [x.detach().clone() for x in output if hasattr(x, "detach")]
+        else:
+            outputs[name] = output.detach().clone()
+    return hook
+
+def create_hooks(inputs, outputs, model):
+    # Iterate over modules, not parameters
+    for name, module in model.named_modules():
+        handle = module.register_forward_hook(get_input_ouput(inputs,outputs, name))
+        print(f"Registered hook on {name}: {handle}")
 
 OPTIMIZER_REGISTRY = {
     "AdamW": torch.optim.AdamW,
