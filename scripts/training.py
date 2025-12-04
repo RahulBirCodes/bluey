@@ -148,6 +148,13 @@ class WarmupConstantDecayLrScheduler:
 class JointOptimizer:
     def __init__(self, *optimizers):
         self.optimizers = optimizers
+    
+    @property
+    def param_groups(self):
+        groups = []
+        for opt in self.optimizers:
+            groups.extend(opt.param_groups)
+        return groups
 
     def step(self):
         for opt in self.optimizers:
