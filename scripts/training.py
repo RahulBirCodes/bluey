@@ -299,7 +299,7 @@ def create_optimizer_groups(model):
         if not param.requires_grad:
             continue
         # run Adam on emb, unemb, and gain parameters
-        if "unembedding" in name or "embedding" in name or "gain" in name:
+        if "unembedding" in name or "embedding" in name or param.ndim < 2:
             adam_params.append(param)
         else:
             std_params.append(param)
