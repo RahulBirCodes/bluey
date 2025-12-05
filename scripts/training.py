@@ -259,10 +259,10 @@ def train(
             print(f"[Step {step}] loss = {loss.item():.6f}")
 
         if logger is not None:
-            iter_sec = time.time() - iter_start
-            logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
             for monitor in monitors:
                 monitor.log_to_wandb(logger, step)
+            iter_sec = time.time() - iter_start
+            logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
         
         for monitor in monitors:
             monitor.reset()
