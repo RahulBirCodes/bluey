@@ -281,10 +281,10 @@ class WandbLossLogger:
         self.run = run
         self.last_k = deque(maxlen=last_k)
     
-    def log(self, metrics: dict):
+    def log(self, metrics: dict, step: int | None = None):
         if "train/loss" in metrics:
             self.last_k.append(metrics["train/loss"])
-        self.run.log(metrics)
+        self.run.log(metrics, step=step)
     
     def get_last_k_loss(self):
         return sum(self.last_k) / len(self.last_k)
