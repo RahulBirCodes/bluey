@@ -13,6 +13,7 @@ from ..model.model import orthogonal_init
 from ..scripts.dataset import get_batch as get_ols_batch
 import datetime
 from typing import Optional
+from ..scripts.monitors import MaxAbsActMonitor, RMSMonitor
 
 # Optional TPU support
 try:
@@ -191,6 +192,7 @@ def train(
     checkpoint_dir=None,
     resume_from: str | None = None,
     scheduler=None,
+    monitors=[]
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
@@ -259,6 +261,11 @@ def train(
         if logger is not None:
             iter_sec = time.time() - iter_start
             logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
+            for monitor in monitors:
+                monitor.log_to_wandb(logger, step)
+        
+        for monitor in monitors:
+            monitor.reset()
 
     return model
 
@@ -353,7 +360,11 @@ def run_from_config(config: ExperimentConfig):
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
+    max_abs_act_monitor = MaxAbsActMonitor(model)
+    rms_monitor = RMSMonitor(model)
     model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
+    max_abs_act_monitor.register_hook(model)
+    rms_monitor.register_hook(model)
 
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
     if optimizer_name == "ManifoldMuon":
@@ -386,6 +397,7 @@ def run_from_config(config: ExperimentConfig):
         scheduler=scheduler,
         add_fake_dim=add_fake_dim,
         add_input_noise=add_input_noise,
+        monitors=[max_abs_act_monitor, rms_monitor]
     )
 
     avg_last_k_loss = logger.get_last_k_loss()
