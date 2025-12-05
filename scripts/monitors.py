@@ -1,5 +1,5 @@
 import torch
-from model.model import MultiHeadAttention, SwiGLU
+from ..model.model import MultiHeadAttention, SwiGLU
 
 class MaxAbsActMonitor:
     def __init__(self, model):
