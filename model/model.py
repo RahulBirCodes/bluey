@@ -22,12 +22,7 @@ class RotaryEmbedding(nn.Module):
     return cos, sin
   
   def apply_rotary_emb(self, x, cos, sin):
-    # t, d/2 = cos.shape
-    # t, d/2 = sin.shape
-    # b, h, t, d = x.shape
     x1, x2 = torch.chunk(x, 2, dim=-1)
-    # b, h, t, d/2 = x1.shape
-    # b, h, t, d/2 = x2.shape
     o1 = x1 * cos - x2 * sin
     o2 = x1 * sin + x2 * cos
     # absolute position of rotated features doesn't matter as long as it's consistent in q and k in dot prod
@@ -97,9 +92,6 @@ class MultiHeadAttention(nn.Module):
     self.d_model = d_model
     self.n_heads = n_heads
     self.d_k = d_model // n_heads
-    # self.q = nn.Linear(d_model, d_model, bias=False)
-    # self.k = nn.Linear(d_model, d_model, bias=False)
-    # self.v = nn.Linear(d_model, d_model, bias=False)
     if manifold_linear_gain_cap is not None:
       self.qkv = ManifoldLinearGain(d_model, 3 * d_model, max_gain=manifold_linear_gain_cap)
       self.out = ManifoldLinearGain(d_model, d_model, max_gain=manifold_linear_gain_cap)
@@ -131,9 +123,6 @@ class MultiHeadAttention(nn.Module):
   def forward(self, x):
     b, t, d = x.shape
     qkv = self.qkv(x)
-    # q = self.q(x)
-    # k = self.k(x)
-    # v = self.v(x)
     q = qkv[:, :, :self.d_model].contiguous()
     k = qkv[:, :, self.d_model:2*self.d_model].contiguous()
     v = qkv[:, :, 2*self.d_model:].contiguous()
@@ -264,10 +253,12 @@ class Transformer(nn.Module):
     self.xy_size = xy_size
     self.blocks = nn.ModuleList([TransformerBlock(n_layers, hidden_size, n_heads, norm_fn=norm_fn, lips=lips, manifold_linear_gain_cap=manifold_linear_gain_cap) for _ in range(n_layers)])
     input_dim = 2 * (xy_size + 1) + (1 if add_fake_dim else 0)
-    if lips:
-      self.embedding = LinearEmbedding(input_dim, hidden_size, xy_size)
-    else:
-      self.embedding = nn.Linear(input_dim, hidden_size, bias=False)
+    # we remove the input embedding linear layer for now as it plateaus loss too early and provides no additional stability
+    # if lips:
+    #   self.embedding = LinearEmbedding(input_dim, hidden_size, xy_size)
+    # else:
+    #   self.embedding = nn.Linear(input_dim, hidden_size, bias=False)
+    self.embedding = nn.Linear(input_dim, hidden_size, bias=False)
     self.embedding.is_input_embedding = True
     # emb should NOT use standard Xavier initialization
     # we can calculate and see that we need to scale by (xy_size + 1)**-0.5 to get the activation rms norm to be 1

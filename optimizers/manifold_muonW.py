@@ -45,49 +45,6 @@ def manifold_muon_step(
         
     return new_W
 
-def manifold_muon_ADMM_step(
-    W: torch.Tensor,
-    G: torch.Tensor,
-    lr: float,
-    alpha: float = 0.01,
-    steps: int = 50,
-    rho: int = 4.0,
-    tol: float = 1e-6,
-) -> torch.Tensor:
-    """Implements GD on || G + W @ (L + L.mT) ||_* (c.f. the blog)"""
-    # Ensure that W and G are both tall matrices
-    should_transpose = W.shape[0] < W.shape[1]
-    if should_transpose:
-        W = W.T
-        G = G.T
-    # Initialize the lagrangian, slack, and dual variable
-    Lambda = -0.25 * (W.T @ G + G.T @ W)
-    X = G + 2 * W @ Lambda
-    Omega = torch.zeros_like(X)
-    # Solve the dual problem with ADMM to find the update direction A
-    for step in range(steps):
-        #if step % 10 == 0:
-            #print(f"W: {W} and step: {step}")
-        # Update for Lambda (orthonormal least-squares solve)
-        P = W.mT @ (1 / rho * Omega + X - G)
-        Lambda_upd = 0.25 * (P + P.mT)
-        # Update for X (singular value thresholding)
-        B = G + 2 * W @ Lambda_upd - 1 / rho * Omega
-        eye = torch.eye(B.shape[1], device=B.device, dtype=B.dtype)
-        P_pos = 0.5 * (eye + msign(B.mT @ B - 1 / rho**2 * eye))
-        X_upd = (B - 1 / rho * msign(B)) @ P_pos
-        # Update for Omega (dual ascent)
-        Omega_upd = Omega + rho * (X_upd - 2 * W @ Lambda_upd - G)
-        Lambda, X, Omega = Lambda_upd, X_upd, Omega_upd
-    # Calculate A from final ADMM solution
-    # (at convergence, G + 2 * W @ Lambda \approx X)
-    A = msign(G + 2 * W @ Lambda)
-    # Descend on the primal problem
-    new_W = W - lr * A
-    # Retract to the manifold
-    new_W = msign(new_W)
-    # Restore the shape of the solution and return
-    return new_W.T if should_transpose else new_W
 
 def manifold_muon_step_online(
     W: torch.Tensor,
