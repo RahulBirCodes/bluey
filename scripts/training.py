@@ -360,9 +360,9 @@ def run_from_config(config: ExperimentConfig):
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
+    model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
     max_abs_act_monitor = MaxAbsActMonitor(model)
     rms_monitor = RMSMonitor(model)
-    model = make_model(arch_name, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
     max_abs_act_monitor.register_hook(model)
     rms_monitor.register_hook(model)
 
