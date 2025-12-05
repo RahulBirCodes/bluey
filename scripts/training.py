@@ -219,7 +219,7 @@ def train(
         B, S, D = outputs.shape
         b_idx = torch.arange(B, device=device).unsqueeze(1)
         y_pred = outputs[b_idx, x_token_indices, :]
-        loss = torch.sum((y_pred-Y)**2, dim=1).mean()
+        loss = torch.sum((y_pred-Y)**2, dim=2).mean()
 
         optimizer.zero_grad()
         loss.backward()

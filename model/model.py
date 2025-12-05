@@ -105,7 +105,9 @@ class MultiHeadAttention(nn.Module):
     B, H, T, D = Q.shape
     Q, K = self.rope(Q, K)
     attn_scores = torch.matmul(Q, K.transpose(-2, -1))
-    attn_scores = attn_scores / (self.d_k if self.lips else self.d_k ** 0.5)
+    # We do not scale by d_k for lips because our data generation independently samples the inputs
+    # attn_scores = attn_scores / (self.d_k if self.lips else self.d_k ** 0.5)
+    attn_scores = attn_scores / self.d_k ** 0.5
     mask = torch.tril(torch.ones(T, T, device=Q.device))
     attn_scores= attn_scores.masked_fill(mask == 0, -float("inf"))
     attn_probs = F.softmax(attn_scores, dim=-1)
