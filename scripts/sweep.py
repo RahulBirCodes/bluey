@@ -135,7 +135,7 @@ def main():
                     num_pairs = hparams["num_pairs"]
                     optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size" and k != "num_pairs"}
                     hparam_str = short_hparam_str(hparams)
-                    run_name = f"{optimizer_name}_norm_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
+                    run_name = f"{optimizer_name}_norm_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}{'_clip_grad' if optimizer_name == 'ManifoldMuon' else ''}"
                     spec = {
                         "run_name": run_name,
                         "arch_name": arch_name,
