@@ -172,6 +172,13 @@ class JointOptimizer:
         for opt, sd in zip(self.optimizers, state_dicts):
             opt.load_state_dict(sd)
 
+    @property
+    def param_groups(self):
+        groups = []
+        for opt in self.optimizers:
+            groups.extend(opt.param_groups)
+        return groups
+
 
 def train(
     model,
@@ -295,7 +302,7 @@ class WandbLossLogger:
 
 OPTIMIZER_REGISTRY = {
     "AdamW": torch.optim.AdamW,
-    "MuonW": MuonW,
+    "Muon": torch.optim.Muon,
     "ManifoldMuon": ManifoldMuon,
 }
 
@@ -366,12 +373,21 @@ def run_from_config(config: ExperimentConfig):
     max_abs_act_monitor.register_hook(model)
     rms_monitor.register_hook(model)
 
+    adam_kwargs = {}
+    if "lr" in optimizer_kwargs:
+        adam_kwargs["lr"] = optimizer_kwargs["lr"]
+    if "weight_decay" in optimizer_kwargs:
+        adam_kwargs["weight_decay"] = optimizer_kwargs["weight_decay"]
+    if "beta1" in optimizer_kwargs and "beta2" in optimizer_kwargs:
+        adam_kwargs["betas"] = (optimizer_kwargs["beta1"], optimizer_kwargs["beta2"])
+    del optimizer_kwargs["betas"]
+    
     optimizer_class = OPTIMIZER_REGISTRY[optimizer_name]
-    if optimizer_name == "ManifoldMuon":
+    if optimizer_name == "ManifoldMuon" or optimizer_name == "Muon":
         std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
-            torch.optim.AdamW(adam_params, lr=0.01, betas=(0.9, 0.98), weight_decay=0.01)
+            torch.optim.AdamW(adam_params, **adam_kwargs)
         )   
     else:
         optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)

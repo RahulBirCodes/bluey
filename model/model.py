@@ -282,7 +282,8 @@ class Transformer(nn.Module):
 
 @torch.no_grad()
 def orthogonal_init(m):
-    if getattr(m, "is_input_embedding", False):
+    # Skip custom init for embedding & unembedding
+    if getattr(m, "is_input_embedding", False) or getattr(m, "is_unembedding", False):
         return
     if isinstance(m, nn.Linear):
         w = m.weight

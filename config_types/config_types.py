@@ -4,6 +4,8 @@ class OptimizerKwargs(TypedDict, total=False):
     lr: float
     weight_decay: float
     betas: tuple[float, float]
+    beta1: float
+    beta2: float
     momentum: float
     nesterov: bool
 
