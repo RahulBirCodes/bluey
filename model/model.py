@@ -296,14 +296,14 @@ def orthogonal_init(m):
         if m.bias is not None:
             nn.init.zeros_(m.bias)
 
-def make_model(arch_name, lips=False, add_fake_dim=False, manifold_linear_gain_cap=None):
+def make_model(arch_name, lips=False, xy_size=5, add_fake_dim=False, manifold_linear_gain_cap=None):
     if arch_name == "rms":
       ln = lambda d: RMSNorm(d, learnable=False)
     elif arch_name == "standard":
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None
-    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=5, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
+    transformer = Transformer(hidden_size=256, n_heads=8, n_layers=15, xy_size=xy_size, norm_fn=ln, lips=lips, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
     if lips:
       transformer.apply(orthogonal_init)
     return transformer
