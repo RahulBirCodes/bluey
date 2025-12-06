@@ -133,7 +133,7 @@ def main():
                 for idx, hparams in enumerate(hparam_dicts):
                     batch_size = hparams["batch_size"]
                     num_pairs = hparams["num_pairs"]
-                    optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
+                    optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size" and k != "num_pairs"}
                     hparam_str = short_hparam_str(hparams)
                     run_name = f"{optimizer_name}_norm_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
                     spec = {
