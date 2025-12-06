@@ -382,6 +382,7 @@ def run_from_config(config: ExperimentConfig):
         if "beta1" in optimizer_kwargs and "beta2" in optimizer_kwargs:
             adam_kwargs["betas"] = (optimizer_kwargs["beta1"], optimizer_kwargs["beta2"])
         del optimizer_kwargs["betas"]
+        std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
             torch.optim.AdamW(adam_params, **adam_kwargs)
