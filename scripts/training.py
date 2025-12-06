@@ -295,7 +295,7 @@ class WandbLossLogger:
 
 OPTIMIZER_REGISTRY = {
     "AdamW": torch.optim.AdamW,
-    "MuonW": torch.optim.Muon,
+    "MuonW": MuonW,
     "ManifoldMuon": ManifoldMuon,
 }
 
