@@ -299,7 +299,7 @@ def orthogonal_init(m):
 def make_model(arch_name, lips=False, xy_size=5, add_fake_dim=False, manifold_linear_gain_cap=None):
     if arch_name == "rms":
       ln = lambda d: RMSNorm(d, learnable=False)
-    elif arch_name == "standard":
+    elif arch_name == "ln":
       ln = lambda d: LayerNorm(d, learnable=True)
     else:
       ln = None

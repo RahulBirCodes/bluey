@@ -5,51 +5,30 @@ import json
 import os
 
 
-HYPERPARAM_GRID_ADAMW = {
-    "lr": [3e-4, 1e-3],
+HYPERPARAM_GRID_ADAMW_MUON = {
+    "lr": [0.01, 1e-3, 1e-4],
     "beta1": [0.9],
     "beta2": [0.98],
-    "weight_decay": [0.0, 0.1],
-    "batch_size": [64, 256],
+    "weight_decay": [0.1],
+    "batch_size": [64, 128, 256],
+    "num_pairs": [64, 128, 256]
 }
 
-HYPERPARAM_GRID_MUON = {
-    "lr": [1e-3, 3e-3],
-    "beta1": [0.9],
-    "beta2": [0.98],
-    "weight_decay": [0.0, 0.05],
-    "batch_size": [64, 256],
+HYPERPARAM_GRID_MANIFOLD_MUON = {
+    "lr": [0.2, 0.1, 0.05],
+    "batch_size": [64, 128, 256],
+    "num_pairs": [64, 128, 256]
 }
 
-""" 
-HYPERPARAM_GRID_ADAMW = {
-    "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
-    "beta1": [0.85, 0.9, 0.95],
-    "beta2": [0.95, 0.98, 0.999],
-    "weight_decay": [0.0, 0.01, 0.1, 0.2],
-    "batch_size": [32, 64, 128, 256, 512, 1024],
-    
-} 
-
-HYPERPARAM_GRID_MUON = {
-    "lr": [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2],
-    "momentum": [0.9, 0.95, 0.98],  # often you’ll just fix 0.95
-    "weight_decay": [0.0, 0.01, 0.1],
-    "batch_size": [32, 64, 128, 256, 512, 1024],
-}
-
-
-"""
-
-OPTIMIZER_NAMES = ['AdamW', 'MuonW', "ManifoldMuon"]
+OPTIMIZER_NAMES = ['AdamW', 'Muon', "ManifoldMuon"]
 
 OPTIMIZER_GRID_REGISTRY = {
-    "AdamW": HYPERPARAM_GRID_ADAMW,
-    "MuonW": HYPERPARAM_GRID_MUON,
-    "ManifoldMuon": HYPERPARAM_GRID_MUON,
+    "AdamW": HYPERPARAM_GRID_ADAMW_MUON,
+    "Muon": HYPERPARAM_GRID_ADAMW_MUON,
+    "ManifoldMuon": HYPERPARAM_GRID_MANIFOLD_MUON,
 }
 
-MODEL_ARCHS = ["rms", "standard", "none"]
+MODEL_ARCHS = ["rms", "none"]
 
 def short_hparam_str(hparams: dict, max_len: int = 128) -> str:
     """
@@ -145,6 +124,7 @@ def main():
                 hparam_dicts = list(iter_hparam_configs(opt_grid))
                 for idx, hparams in enumerate(hparam_dicts):
                     batch_size = hparams["batch_size"]
+                    num_pairs = hparams["num_pairs"]
                     optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
                     hparam_str = short_hparam_str(hparams)
                     run_name = f"{optimizer_name}_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
@@ -165,7 +145,6 @@ def main():
                     out_path = os.path.join(arch_dir, f"job_{job_id}.json")
                     with open(out_path, "w") as f:
                         json.dump(spec, f, indent=2)
-                #print(f"  wrote {out_path}")
     print("\n=== Sweep generation complete ===")
 
 
