@@ -75,6 +75,20 @@ def main():
     )
 
     parser.add_argument(
+        "--add_fake_dim",
+        type=bool,
+        required=True,
+        help="Add fake input to input.",
+    )
+
+    parser.add_argument(
+        "--add_input_noise",
+        type=bool,
+        required=True,
+        help="Add noise to the input.",
+    )
+
+    parser.add_argument(
         "--project_name",
         type=str,
         required=True,
@@ -100,6 +114,8 @@ def main():
     project_name = args.project_name
     last_k = args.last_k
     root = args.output_dir
+    add_input_noise = args.add_input_noise
+    add_fake_dim = args.add_fake_dim
 
     os.makedirs(root, exist_ok=True)
     print("\n=== Generating sweep configs ===")
@@ -131,6 +147,8 @@ def main():
                         "batch_size": batch_size,
                         "project_name": project_name,
                         "last_k": last_k,
+                        "add_input_noise": add_input_noise,
+                        "add_fake_dim": add_fake_dim
                     }
                     # job_000.json naming
                     job_id = f"{idx:03d}"

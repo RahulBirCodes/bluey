@@ -15,6 +15,8 @@ pip install .
 ```
 python3 scripts/sweep.py \
     --xy_size 5 \
+    --add_fake_dim True \
+    --add_input_noise True \
     --project_name bluey-merdifold \
     --last_k 50 \
     --output_dir jobs
