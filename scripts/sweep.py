@@ -17,7 +17,7 @@ HYPERPARAM_GRID_ADAMW_MUON = {
 HYPERPARAM_GRID_MANIFOLD_MUON = {
     "lr": [0.2, 0.1, 0.05],
     "batch_size": [64, 128, 256],
-    "num_pairs": [64, 128, 256]
+    "num_pairs": [64, 128, 256],
 }
 
 OPTIMIZER_NAMES = ['AdamW', 'Muon', "ManifoldMuon"]
@@ -148,7 +148,8 @@ def main():
                         "project_name": project_name,
                         "last_k": last_k,
                         "add_input_noise": add_input_noise,
-                        "add_fake_dim": add_fake_dim
+                        "add_fake_dim": add_fake_dim,
+                        "manifold_linear_gain_cap": 5 if optimizer_name == "ManifoldMuon" else None
                     }
                     # job_000.json naming
                     job_id = f"{idx:03d}"
