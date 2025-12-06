@@ -149,7 +149,7 @@ def main():
                         "last_k": last_k,
                         "add_input_noise": add_input_noise,
                         "add_fake_dim": add_fake_dim,
-                        "manifold_linear_gain_cap": 5 if optimizer_name == "ManifoldMuon" else None
+                        "manifold_linear_gain_cap": 3 if optimizer_name == "ManifoldMuon" else None
                     }
                     # job_000.json naming
                     job_id = f"{idx:03d}"
