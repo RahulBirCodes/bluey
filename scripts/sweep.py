@@ -11,6 +11,7 @@ HYPERPARAM_GRID_ADAMW = {
     "beta2": [0.98],
     "weight_decay": [0.0, 0.1],
     "batch_size": [64, 256],
+    "num_pairs": [5, 10, 20],
 }
 
 HYPERPARAM_GRID_MUON = {
@@ -19,6 +20,7 @@ HYPERPARAM_GRID_MUON = {
     "beta2": [0.98],
     "weight_decay": [0.0, 0.05],
     "batch_size": [64, 256],
+    "num_pairs": [5, 10, 20],
 }
 
 """ 
@@ -98,8 +100,9 @@ def main():
     parser.add_argument(
         "--num_pairs",
         type=int,
-        required=True,
-        help="Number of (x, y) pairs per batch (T).",
+        required=False,
+        default=None,
+        help="Number of (x, y) pairs per batch (T). Used as fallback if not in hyperparameter grid.",
     )
 
     parser.add_argument(
@@ -145,7 +148,14 @@ def main():
                 hparam_dicts = list(iter_hparam_configs(opt_grid))
                 for idx, hparams in enumerate(hparam_dicts):
                     batch_size = hparams["batch_size"]
-                    optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
+                    # Extract num_pairs from hparams if present, otherwise use command-line arg
+                    if "num_pairs" in hparams:
+                        num_pairs_value = hparams["num_pairs"]
+                    else:
+                        if num_pairs is None:
+                            raise ValueError("num_pairs must be provided either in hyperparameter grid or via --num_pairs argument")
+                        num_pairs_value = num_pairs
+                    optimizer_kwargs = {k: v for k, v in hparams.items() if k not in ["batch_size", "num_pairs"]}
                     hparam_str = short_hparam_str(hparams)
                     run_name = f"{optimizer_name}_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
                     spec = {
@@ -155,7 +165,7 @@ def main():
                         "optimizer_name": optimizer_name,
                         "optimizer_kwargs": optimizer_kwargs,
                         "xy_size": xy_size,
-                        "num_pairs": num_pairs,
+                        "num_pairs": num_pairs_value,
                         "batch_size": batch_size,
                         "project_name": project_name,
                         "last_k": last_k,
