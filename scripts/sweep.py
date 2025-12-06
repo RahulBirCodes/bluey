@@ -11,13 +11,13 @@ HYPERPARAM_GRID_ADAMW_MUON = {
     "beta2": [0.98],
     "weight_decay": [0.1],
     "batch_size": [64, 128, 256],
-    "num_pairs": [64, 128, 256]
+    "num_pairs": [64, 128]
 }
 
 HYPERPARAM_GRID_MANIFOLD_MUON = {
     "lr": [0.2, 0.1, 0.05],
     "batch_size": [64, 128, 256],
-    "num_pairs": [64, 128, 256],
+    "num_pairs": [64, 128],
 }
 
 OPTIMIZER_NAMES = ['AdamW', 'Muon', "ManifoldMuon"]
