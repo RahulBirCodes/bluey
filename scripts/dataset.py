@@ -1,5 +1,23 @@
 import torch
 
+def generate_well_conditioned_X(B, T, D, device=None, cond_threshold=1000.0):
+    """
+    Generates a batch of matrices X (B, T, D) where every matrix along batch dimension
+    has a condition number less than `cond_threshold`.
+    """
+    X = torch.randn(B, T, D, device=device)
+    conds = torch.linalg.cond(X) 
+    bad_mask = conds > cond_threshold
+    retries = 0
+    while torch.any(bad_mask): 
+        num_bad = bad_mask.sum().item()
+        X[bad_mask] = torch.randn(num_bad, T, D, device=device)
+        new_conds = torch.linalg.cond(X[bad_mask])
+        still_bad_subset = new_conds > cond_threshold
+        bad_mask[bad_mask.clone()] = still_bad_subset
+        retries += 1
+        
+    return X, retries
 
 def get_batch(
     batch_size: int = 8,
@@ -36,7 +54,10 @@ def get_batch(
 
     B, T, D = batch_size, num_pairs, xy_size
     token_dim = 2 * (D + 1) + (1 if add_fake_dim else 0)   # [x_flag, y_flag, x_D, y_D, [OPTIONAL 1]]
-    X = torch.randn(B, T, D, device=device)
+    # X = torch.randn(B, T, D, device=device)
+    X, retries = generate_well_conditioned_X(B, T, D, device=device)
+    # if retries > 0:
+    #     print(f"Generated well-conditioned input after {retries} retries.")
     W = torch.randn(B, D, D, device=device) / (D ** 0.5)
     Y = torch.einsum("btd,bdk->btk", X, W)
 
