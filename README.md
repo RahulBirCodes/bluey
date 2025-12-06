@@ -15,7 +15,6 @@ pip install .
 ```
 python3 scripts/sweep.py \
     --xy_size 5 \
-    --num_pairs 48 \
     --project_name bluey-merdifold \
     --last_k 50 \
     --output_dir jobs

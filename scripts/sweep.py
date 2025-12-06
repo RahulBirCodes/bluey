@@ -75,13 +75,6 @@ def main():
     )
 
     parser.add_argument(
-        "--num_pairs",
-        type=int,
-        required=True,
-        help="Number of (x, y) pairs per batch (T).",
-    )
-
-    parser.add_argument(
         "--project_name",
         type=str,
         required=True,
@@ -104,7 +97,6 @@ def main():
 
     args = parser.parse_args()
     xy_size = args.xy_size
-    num_pairs = args.num_pairs
     project_name = args.project_name
     last_k = args.last_k
     root = args.output_dir
@@ -120,14 +112,14 @@ def main():
             for arch_name in MODEL_ARCHS:
                 arch_dir = os.path.join(opt_dir, arch_name, 'lips' if lips else 'nolips')
                 os.makedirs(arch_dir, exist_ok=True)
-                print(f"\nOptimizer: {optimizer_name}, Arch: {arch_name}")
+                print(f"\nOptimizer: {optimizer_name}, Arch: {arch_name}, Lips: {lips}")
                 hparam_dicts = list(iter_hparam_configs(opt_grid))
                 for idx, hparams in enumerate(hparam_dicts):
                     batch_size = hparams["batch_size"]
                     num_pairs = hparams["num_pairs"]
                     optimizer_kwargs = {k: v for k, v in hparams.items() if k != "batch_size"}
                     hparam_str = short_hparam_str(hparams)
-                    run_name = f"{optimizer_name}_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
+                    run_name = f"{optimizer_name}_norm_{arch_name}_{hparam_str}_{'lips' if lips else 'nolips'}"
                     spec = {
                         "run_name": run_name,
                         "arch_name": arch_name,
