@@ -335,7 +335,7 @@ def run_from_config(config: ExperimentConfig):
     lips: bool = config["lips"]
     add_fake_dim: bool = config["add_fake_dim"]
     add_input_noise: bool = config["add_input_noise"]
-    manifold_linear_gain_cap: Optional[float] = config["manifold_linear_gain_cap"]
+    manifold_linear_gain_cap: Optional[float] = config.get("manifold_linear_gain_cap", None)
 
     ckpt_dir = os.path.join(
         base_ckpt_dir,
