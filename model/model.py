@@ -131,6 +131,8 @@ class MultiHeadAttention(nn.Module):
     v = self.split_heads(v)
     attn_out, attn_probs = self.sdpa(q, k, v)
     output = self.out(self.combine_heads(attn_out))
+    if self.lips:
+      output = output / 3
     return output, attn_probs
 
 
@@ -195,6 +197,8 @@ class MLP(nn.Module):
     else:
       t = x
     t = self.swiglu(t)
+    if self.lips:
+      t = t / 3
     if self.lips:
       out = t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
     else:
