@@ -222,6 +222,8 @@ def train(
         loss = torch.sum((y_pred-Y)**2, dim=2).mean()
         optimizer.zero_grad()
         loss.backward()
+        if isinstance(optimizer, ManifoldMuon):
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer_step_fn(optimizer)
         if scheduler is not None:
             scheduler.step()
