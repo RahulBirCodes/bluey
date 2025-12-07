@@ -220,11 +220,15 @@ def train(
         b_idx = torch.arange(B, device=device).unsqueeze(1)
         y_pred = outputs[b_idx, x_token_indices, :]
         loss = torch.sum((y_pred-Y)**2, dim=2).mean()
-
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"Skipping step {step}: Loss is {loss.item()}")
+            optimizer.zero_grad()
+            continue
         optimizer.zero_grad()
         loss.backward()
-        if isinstance(optimizer, ManifoldMuon):
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+        # if isinstance(optimizer, ManifoldMuon):
+        #     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer_step_fn(optimizer)
         if scheduler is not None:
             scheduler.step()

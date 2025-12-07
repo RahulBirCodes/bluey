@@ -54,8 +54,8 @@ def get_batch(
 
     B, T, D = batch_size, num_pairs, xy_size
     token_dim = 2 * (D + 1) + (1 if add_fake_dim else 0)   # [x_flag, y_flag, x_D, y_D, [OPTIONAL 1]]
-    # X = torch.randn(B, T, D, device=device)
-    X, retries = generate_well_conditioned_X(B, T, D, device=device)
+    X = torch.randn(B, T, D, device=device)
+    # X, retries = generate_well_conditioned_X(B, T, D, device=device)
     # if retries > 0:
     #     print(f"Generated well-conditioned input after {retries} retries.")
     W = torch.randn(B, D, D, device=device) / (D ** 0.5)
