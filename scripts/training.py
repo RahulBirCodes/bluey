@@ -203,6 +203,7 @@ def train(
     
     prev_step = 0
     if resume_from:
+        print("Resuming from:", resume_from)
         prev_step = load_checkpoint(model, optimizer, resume_from, device=device, scheduler=scheduler)
        
     for step in range(prev_step, num_steps):
