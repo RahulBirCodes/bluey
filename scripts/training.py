@@ -372,7 +372,7 @@ def run_from_config(config: ExperimentConfig):
         std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
-            torch.optim.AdamW(adam_params, lr=1e-4, betas=(0.9, 0.98), weight_decay=0.01)
+            torch.optim.AdamW(adam_params, lr=0.01, betas=(0.9, 0.98), weight_decay=0.01)
         ) 
     elif optimizer_name == "Muon":
         std_params, adam_params = create_optimizer_groups(model)
