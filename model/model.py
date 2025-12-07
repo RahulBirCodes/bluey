@@ -197,8 +197,8 @@ class MLP(nn.Module):
     else:
       t = x
     t = self.swiglu(t)
-    # if self.lips:
-    #   t = t / 3
+    if self.lips:
+      t = t / 3
     if self.lips:
       out = t / self.n_layers + x * (self.n_layers - 1) / self.n_layers
     else:
