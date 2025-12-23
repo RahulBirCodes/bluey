@@ -1,15 +1,18 @@
-## Code associated with our paper (Replacing Normalization in Deep Transformers with
-Lipschitz and Manifold Geometry) - under submission.
+## Associated code for (Replacing Normalization in Deep Transformers with Lipschitz and Manifold Geometry) 
 
 Read our paper here! [Replacing Norm.pdf](https://github.com/user-attachments/files/24301404/Replacing.Norm.pdf)
 
+(Currently under submission)
 
-## Install the repository
+
+## Reproducing experiments
+
+### Install the repository
 ```
 git clone https://github.com/RahulBirCodes/bluey.git
 cd bluey
 ```
-## Environment set-up
+### Environment set-up
 ```
 uv lock
 ```
@@ -17,7 +20,7 @@ or if uv uninstalled
 ```
 pip install .
 ```
-## Hyperparameter sweep job generation (deterministic)
+### Hyperparameter sweep job generation (deterministic)
 ```
 python3 scripts/sweep.py \
     --xy_size 5 \
@@ -28,14 +31,12 @@ python3 scripts/sweep.py \
     --output_dir jobs
 ```
 
-## Run specific job
-
+### Run specific job
 ```
-
 run_job.sh OPTIMIZER ARCH JOB_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY
 ```
 
-## Run multiple jobs
+### Run multiple jobs
 You can vary the number of devices by adding an optional number of GPU flag
 ```
 chmod +x run_job.sh run_jobs.sh
@@ -43,9 +44,4 @@ chmod +x run_job.sh run_jobs.sh
 run_jobs.sh OPTIMIZER ARCH START_ID END_ID PHASE DEVICE CKPT_ROOT NUM_STEPS CHECKPOINT_EVERY [NUM_GPU]
 
 scripts/run_job.sh ManifoldMuonW none 1 sweep cpu checkpoints 200 200
-
-
-
 ```
-
-Wandb auths the first time you do init call if not alr auth'd.
