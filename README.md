@@ -1,3 +1,9 @@
+## Code associated with our paper (Replacing Normalization in Deep Transformers with
+Lipschitz and Manifold Geometry) - under submission.
+
+Read our paper here! [Replacing Norm.pdf](https://github.com/user-attachments/files/24301404/Replacing.Norm.pdf)
+
+
 ## Install the repository
 ```
 git clone https://github.com/RahulBirCodes/bluey.git
