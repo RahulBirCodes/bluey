@@ -4,6 +4,10 @@ from ..optimizers.msign import msign
 import math
 import torch
 
+# adapted from code associated with Jeremey Bernstein's Modular Manifolds blogpost
+# https://thinkingmachines.ai/blog/modular-manifolds/
+
+
 def manifold_muon_step(
     W: torch.Tensor,
     G: torch.Tensor,
@@ -42,14 +46,14 @@ def manifold_muon_step(
 
     if not orig_tall:
         new_W = new_W.transpose(-2, -1)
-        
+
     return new_W
 
 
 def manifold_muon_step_online(
     W: torch.Tensor,
     G: torch.Tensor,
-    Lambda: torch.Tensor, # Passed in from state
+    Lambda: torch.Tensor,  # Passed in from state
     lr: float,
     alpha: float = 0.01,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -69,10 +73,10 @@ def manifold_muon_step_online(
     # We measure the violation of the tangent space constraint
     # Candidate direction A is based on current Lambda
     A_candidate = msign(G + 2 * W @ Lambda)
-    
+
     # Violation H
     H = W.T @ A_candidate + A_candidate.T @ W
-    
+
     # Update Lambda (Ascent)
     Lambda = Lambda - alpha * H
 
@@ -153,14 +157,18 @@ class ManifoldMuon(Optimizer):
                     # Muon-style momentum for manifold params
                     state["mm_moment"] = torch.zeros_like(p)
                     dim = min(p.shape[0], p.shape[1])
-                    state["lambda"] = torch.zeros((dim, dim), device=p.device, dtype=p.dtype)
+                    state["lambda"] = torch.zeros(
+                        (dim, dim), device=p.device, dtype=p.dtype
+                    )
 
                 state["step"] += 1
 
                 # 1. Momentum handling
                 if mm_momentum > 0:
                     # Update Muon momentum buffer
-                    state["mm_moment"].mul_(mm_momentum).add_(grad, alpha=1.0 - mm_momentum)
+                    state["mm_moment"].mul_(mm_momentum).add_(
+                        grad, alpha=1.0 - mm_momentum
+                    )
                     G_eff = state["mm_moment"]
                 else:
                     G_eff = grad
@@ -168,13 +176,9 @@ class ManifoldMuon(Optimizer):
                 # 2. Perform Online Manifold Step
                 # Note: We pass the persistent Lambda
                 new_W, new_Lambda = manifold_muon_step_online(
-                    p.data,
-                    G_eff,
-                    state["lambda"],
-                    lr=lr,
-                    alpha=mm_alpha
+                    p.data, G_eff, state["lambda"], lr=lr, alpha=mm_alpha
                 )
-                
+
                 # 3. Apply updates
                 p.data.copy_(new_W)
                 state["lambda"].copy_(new_Lambda)
