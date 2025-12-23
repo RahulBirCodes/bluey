@@ -1,5 +1,8 @@
 import torch
 
+# adapted from code associated with Jeremey Bernstein's Modular Manifolds blogpost
+# https://thinkingmachines.ai/blog/modular-manifolds/
+
 ABC_LIST: list[tuple[float, float, float]] = [
     (8.28721201814563, -23.595886519098837, 17.300387312530933),
     (4.107059111542203, -2.9478499167379106, 0.5448431082926601),
@@ -32,7 +35,11 @@ def msign(G: torch.Tensor, steps: int = 10) -> torch.Tensor:
 
     x /= x.norm(dim=(-2, -1), keepdim=True) * 1.01
     for step in range(steps):
-        a, b, c = ABC_LIST_STABLE[step] if step < len(ABC_LIST_STABLE) else ABC_LIST_STABLE[-1]
+        a, b, c = (
+            ABC_LIST_STABLE[step]
+            if step < len(ABC_LIST_STABLE)
+            else ABC_LIST_STABLE[-1]
+        )
         s = x @ x.mT
         # goal is to compute x = a x + b S x + c S^2 x
         # we can break this up into: x = (a I + (b I + c S) S) x
@@ -46,3 +53,4 @@ def msign(G: torch.Tensor, steps: int = 10) -> torch.Tensor:
         x = x.mT
     x = torch.nan_to_num(x)
     return x.float()
+

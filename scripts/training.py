@@ -1,15 +1,12 @@
 import torch
-import torch.nn.functional as F
 import wandb
 import os
 import glob
 from collections import deque
 import time
-from ..optimizers.muonW1 import MuonW
 from ..optimizers.manifold_muonW import ManifoldMuon
 from ..config_types.config_types import OptimizerKwargs, ExperimentConfig
 from ..model.model import make_model
-from ..model.model import orthogonal_init
 from ..scripts.dataset import get_batch as get_ols_batch
 import datetime
 from typing import Optional
@@ -19,9 +16,11 @@ from ..scripts.monitors import MaxAbsActMonitor, RMSMonitor
 try:
     import torch_xla
     import torch_xla.core.xla_model as xm
+
     HAS_XLA = True
 except ImportError:
     HAS_XLA = False
+
 
 def resolve_device_and_saver(device_str: str):
     """
@@ -47,17 +46,22 @@ def resolve_device_and_saver(device_str: str):
     return device, save_fn, optimizer_step_fn
 
 
-def save_checkpoint(model, optimizer, step: int, path: str, scheduler=None, save_fn=torch.save):
+def save_checkpoint(
+    model, optimizer, step: int, path: str, scheduler=None, save_fn=torch.save
+):
     ckpt = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict() if scheduler else None,
         "step": step,
         "rng_state": torch.random.get_rng_state(),
-        "cuda_rng_state": torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
+        "cuda_rng_state": torch.cuda.get_rng_state()
+        if torch.cuda.is_available()
+        else None,
     }
     save_fn(ckpt, path)
     print(f"[checkpoint] saved to {path}")
+
 
 def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None) -> int:
     ckpt = torch.load(path, map_location=device)
@@ -81,6 +85,7 @@ def load_checkpoint(model, optimizer, path: str, device="cuda", scheduler=None) 
 
     print(f"[checkpoint] resumed from {path}")
     return ckpt.get("step", 0)
+
 
 def find_latest_checkpoint(checkpoint_dir: str) -> str | None:
     if not os.path.isdir(checkpoint_dir):
@@ -122,7 +127,7 @@ class WarmupConstantDecayLrScheduler:
         self.warmup_steps = int(total_steps * warmup_ratio)
         self.decay_steps = int(total_steps * decay_ratio)
         self.decay_start = total_steps - self.decay_steps
-        self.base_lrs = [g['lr'] for g in optimizer.param_groups]
+        self.base_lrs = [g["lr"] for g in optimizer.param_groups]
         self.last_step = 0
 
     def state_dict(self):
@@ -149,7 +154,7 @@ class WarmupConstantDecayLrScheduler:
 class JointOptimizer:
     def __init__(self, *optimizers):
         self.optimizers = optimizers
-    
+
     @property
     def param_groups(self):
         groups = []
@@ -192,7 +197,7 @@ def train(
     checkpoint_dir=None,
     resume_from: str | None = None,
     scheduler=None,
-    monitors=[]
+    monitors=[],
 ):
     device, save_fn, optimizer_step_fn = resolve_device_and_saver(device)
     model.to(device)
@@ -200,12 +205,14 @@ def train(
 
     if checkpoint_dir is not None:
         os.makedirs(checkpoint_dir, exist_ok=True)
-    
+
     prev_step = 0
     if resume_from:
         print("Resuming from:", resume_from)
-        prev_step = load_checkpoint(model, optimizer, resume_from, device=device, scheduler=scheduler)
-       
+        prev_step = load_checkpoint(
+            model, optimizer, resume_from, device=device, scheduler=scheduler
+        )
+
     for step in range(prev_step, num_steps):
         iter_start = time.time()
         tokens, X, Y, W, x_token_indices = get_batch(
@@ -220,7 +227,7 @@ def train(
         B, S, D = outputs.shape
         b_idx = torch.arange(B, device=device).unsqueeze(1)
         y_pred = outputs[b_idx, x_token_indices, :]
-        loss = torch.sum((y_pred-Y)**2, dim=2).mean()
+        loss = torch.sum((y_pred - Y) ** 2, dim=2).mean()
         optimizer.zero_grad()
         loss.backward()
         if isinstance(optimizer, ManifoldMuon):
@@ -232,7 +239,7 @@ def train(
         if checkpoint_dir is not None and step % checkpoint_every == 0 and step != 0:
             now = datetime.datetime.now()
             timestamp = now.strftime("%Y%m%d-%H%M%S")
-            ckpt_path = os.path.join(checkpoint_dir, f"step_{step+1}_{timestamp}.pt")
+            ckpt_path = os.path.join(checkpoint_dir, f"step_{step + 1}_{timestamp}.pt")
             save_checkpoint(
                 model=model,
                 optimizer=optimizer,
@@ -244,7 +251,7 @@ def train(
 
             if logger is not None and hasattr(logger, "run"):
                 artifact = wandb.Artifact(
-                    name=f"ckpt_step_{step+1}",
+                    name=f"ckpt_step_{step + 1}",
                     type="model",
                     metadata={
                         "step": step + 1,
@@ -253,7 +260,7 @@ def train(
                 )
                 artifact.add_file(ckpt_path)
                 logger.run.log_artifact(artifact)
-            
+
             if verbose:
                 print(f"[Step {step}] Saved checkpoint to {ckpt_path}")
 
@@ -264,8 +271,10 @@ def train(
             for monitor in monitors:
                 monitor.log_to_wandb(logger, step)
             iter_sec = time.time() - iter_start
-            logger.log({"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec})
-        
+            logger.log(
+                {"train/loss": loss.item(), "step": step, "train/iter_sec": iter_sec}
+            )
+
         for monitor in monitors:
             monitor.reset()
 
@@ -278,19 +287,20 @@ class WandbLossLogger:
       - forward logs to wandb
       - keep a rolling window of the last K 'loss' values
     """
+
     def __init__(self, run, last_k: int = 50):
         self.start_time = time.time()
         self.run = run
         self.last_k = deque(maxlen=last_k)
-    
+
     def log(self, metrics: dict, step: int | None = None, commit: bool = True):
         if "train/loss" in metrics:
             self.last_k.append(metrics["train/loss"])
         self.run.log(metrics, step=step, commit=commit)
-    
+
     def get_last_k_loss(self):
         return sum(self.last_k) / len(self.last_k)
-    
+
     def finish(self):
         self.run.finish()
 
@@ -300,6 +310,7 @@ OPTIMIZER_REGISTRY = {
     "Muon": torch.optim.Muon,
     "ManifoldMuon": ManifoldMuon,
 }
+
 
 def create_optimizer_groups(model):
     std_params = []
@@ -337,7 +348,9 @@ def run_from_config(config: ExperimentConfig):
     lips: bool = config["lips"]
     add_fake_dim: bool = config["add_fake_dim"]
     add_input_noise: bool = config["add_input_noise"]
-    manifold_linear_gain_cap: Optional[float] = config.get("manifold_linear_gain_cap", None)
+    manifold_linear_gain_cap: Optional[float] = config.get(
+        "manifold_linear_gain_cap", None
+    )
 
     ckpt_dir = os.path.join(
         base_ckpt_dir,
@@ -362,7 +375,13 @@ def run_from_config(config: ExperimentConfig):
     )
 
     logger = WandbLossLogger(run, last_k=last_k)
-    model = make_model(arch_name, lips=lips, xy_size=xy_size, add_fake_dim=add_fake_dim, manifold_linear_gain_cap=manifold_linear_gain_cap)
+    model = make_model(
+        arch_name,
+        lips=lips,
+        xy_size=xy_size,
+        add_fake_dim=add_fake_dim,
+        manifold_linear_gain_cap=manifold_linear_gain_cap,
+    )
     max_abs_act_monitor = MaxAbsActMonitor(model)
     rms_monitor = RMSMonitor(model)
     max_abs_act_monitor.register_hook(model)
@@ -373,14 +392,21 @@ def run_from_config(config: ExperimentConfig):
         std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
-            torch.optim.AdamW(adam_params, lr=0.01, betas=(0.9, 0.98), weight_decay=0.01)
-        ) 
+            torch.optim.AdamW(
+                adam_params, lr=0.01, betas=(0.9, 0.98), weight_decay=0.01
+            ),
+        )
     elif optimizer_name == "Muon":
         std_params, adam_params = create_optimizer_groups(model)
         optimizer = JointOptimizer(
             optimizer_class(std_params, **optimizer_kwargs),
-            torch.optim.AdamW(adam_params, lr=optimizer_kwargs['lr'], betas=(0.9, 0.999), weight_decay=1e-3)
-        )   
+            torch.optim.AdamW(
+                adam_params,
+                lr=optimizer_kwargs["lr"],
+                betas=(0.9, 0.999),
+                weight_decay=1e-3,
+            ),
+        )
     else:
         optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
 
@@ -402,7 +428,7 @@ def run_from_config(config: ExperimentConfig):
         scheduler=scheduler,
         add_fake_dim=add_fake_dim,
         add_input_noise=add_input_noise,
-        monitors=[max_abs_act_monitor, rms_monitor]
+        monitors=[max_abs_act_monitor, rms_monitor],
     )
 
     avg_last_k_loss = logger.get_last_k_loss()
